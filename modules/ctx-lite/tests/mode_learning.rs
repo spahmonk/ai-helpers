@@ -27,7 +27,7 @@ fn test_learner_distinguishes_good_vs_bad_modes() {
     learner.learn_mode("app.rs", ReadMode::Map, 35);
 
     let pattern_learning = learner.patterns.get("*.rs").unwrap();
-    
+
     let sig_record = pattern_learning.modes.get("signatures").unwrap();
     assert_eq!(sig_record.successes, 3);
     assert_eq!(sig_record.failures, 0);
@@ -46,17 +46,17 @@ fn test_learner_improves_with_multiple_reads() {
     let mut learner = ModeLearner::new(60);
 
     // Initial phase: trying different modes
-    learner.learn_mode("data.bin", ReadMode::Full, 40);      // Bad
+    learner.learn_mode("data.bin", ReadMode::Full, 40); // Bad
     learner.learn_mode("data.bin", ReadMode::Signatures, 50); // Bad
-    learner.learn_mode("data.bin", ReadMode::Map, 45);       // Bad
-    learner.learn_mode("data.bin", ReadMode::Diff, 92);      // Good!
+    learner.learn_mode("data.bin", ReadMode::Map, 45); // Bad
+    learner.learn_mode("data.bin", ReadMode::Diff, 92); // Good!
 
     // Learning phase: reinforcing good mode
     learner.learn_mode("data.bin", ReadMode::Diff, 94);
     learner.learn_mode("data.bin", ReadMode::Diff, 91);
 
     let pattern_learning = learner.patterns.get("*.bin").unwrap();
-    
+
     // Diff should be best with strong success rate
     let diff_record = pattern_learning.modes.get("diff").unwrap();
     assert!(diff_record.success_rate() > 0.6);
@@ -84,9 +84,18 @@ fn test_learner_handles_multiple_file_types() {
     learner.learn_mode("backup.bin", ReadMode::Diff, 93);
 
     // Verify each pattern learned its optimal mode
-    assert_eq!(learner.get_recommended_mode("test.rs"), Some(ReadMode::Signatures));
-    assert_eq!(learner.get_recommended_mode("settings.json"), Some(ReadMode::Map));
-    assert_eq!(learner.get_recommended_mode("image.bin"), Some(ReadMode::Diff));
+    assert_eq!(
+        learner.get_recommended_mode("test.rs"),
+        Some(ReadMode::Signatures)
+    );
+    assert_eq!(
+        learner.get_recommended_mode("settings.json"),
+        Some(ReadMode::Map)
+    );
+    assert_eq!(
+        learner.get_recommended_mode("image.bin"),
+        Some(ReadMode::Diff)
+    );
 }
 
 #[test]
@@ -103,7 +112,10 @@ fn test_learner_requires_minimum_samples_for_recommendation() {
 
     // 3+ samples: ready to recommend
     learner.learn_mode("util.rs", ReadMode::Signatures, 78);
-    assert_eq!(learner.get_recommended_mode("helper.rs"), Some(ReadMode::Signatures));
+    assert_eq!(
+        learner.get_recommended_mode("helper.rs"),
+        Some(ReadMode::Signatures)
+    );
 }
 
 #[test]
@@ -127,7 +139,10 @@ fn test_learner_adapts_when_better_mode_discovered() {
     // Best mode should switch to Diff
     let updated_best = learner.patterns.get("*.rs").unwrap().best_mode.clone();
     assert_eq!(updated_best, Some("diff".to_string()));
-    assert_eq!(learner.get_recommended_mode("other_large.rs"), Some(ReadMode::Diff));
+    assert_eq!(
+        learner.get_recommended_mode("other_large.rs"),
+        Some(ReadMode::Diff)
+    );
 }
 
 #[test]
@@ -181,8 +196,13 @@ fn test_learner_compression_threshold_affects_learning() {
     learner_strict.learn_mode("file.py", ReadMode::Signatures, 68);
     learner_strict.learn_mode("file.py", ReadMode::Signatures, 65);
 
-    let strict_record = learner_strict.patterns.get("*.py").unwrap()
-        .modes.get("signatures").unwrap();
+    let strict_record = learner_strict
+        .patterns
+        .get("*.py")
+        .unwrap()
+        .modes
+        .get("signatures")
+        .unwrap();
     assert_eq!(strict_record.successes, 0); // Both below 70% threshold
     assert_eq!(strict_record.failures, 2);
 
@@ -191,8 +211,13 @@ fn test_learner_compression_threshold_affects_learning() {
     learner_lenient.learn_mode("file.py", ReadMode::Signatures, 68);
     learner_lenient.learn_mode("file.py", ReadMode::Signatures, 65);
 
-    let lenient_record = learner_lenient.patterns.get("*.py").unwrap()
-        .modes.get("signatures").unwrap();
+    let lenient_record = learner_lenient
+        .patterns
+        .get("*.py")
+        .unwrap()
+        .modes
+        .get("signatures")
+        .unwrap();
     assert_eq!(lenient_record.successes, 2); // Both above 60% threshold
     assert_eq!(lenient_record.failures, 0);
 }
@@ -221,24 +246,28 @@ fn test_learner_realistic_scenario_compression_improvement() {
 
     // First 5 reads: learning phase, trying different modes
     learner.learn_mode("data_file_1.dat", ReadMode::Signatures, 55); // Bad
-    learner.learn_mode("data_file_2.dat", ReadMode::Map, 50);        // Bad
-    learner.learn_mode("data_file_3.dat", ReadMode::Full, 0);        // Terrible
-    learner.learn_mode("data_file_4.dat", ReadMode::Diff, 91);       // Good!
-    learner.learn_mode("data_file_5.dat", ReadMode::Diff, 89);       // Good!
+    learner.learn_mode("data_file_2.dat", ReadMode::Map, 50); // Bad
+    learner.learn_mode("data_file_3.dat", ReadMode::Full, 0); // Terrible
+    learner.learn_mode("data_file_4.dat", ReadMode::Diff, 91); // Good!
+    learner.learn_mode("data_file_5.dat", ReadMode::Diff, 89); // Good!
 
     // Get initial stats
     let pattern_learning = learner.patterns.get("*.dat").unwrap();
     let diff_record = pattern_learning.modes.get("diff").unwrap();
-    
+
     // After 5 reads, Diff is clearly the best mode
     assert!(diff_record.success_rate() > 0.4);
-    
+
     // Verify average compression is good
     assert!(diff_record.avg_compression > 60.0);
 
     // Continue learning with more reads
     for i in 6..15 {
-        learner.learn_mode(&format!("data_file_{}.dat", i), ReadMode::Diff, 92 - (i % 3) as usize);
+        learner.learn_mode(
+            &format!("data_file_{}.dat", i),
+            ReadMode::Diff,
+            92 - (i % 3) as usize,
+        );
     }
 
     // Final stats should show strong learning
@@ -247,7 +276,10 @@ fn test_learner_realistic_scenario_compression_improvement() {
     assert!(stats.total_attempts >= 10);
 
     // Verify recommendation is available and sensible
-    assert_eq!(learner.get_recommended_mode("new_data_file.dat"), Some(ReadMode::Diff));
+    assert_eq!(
+        learner.get_recommended_mode("new_data_file.dat"),
+        Some(ReadMode::Diff)
+    );
 }
 
 #[test]

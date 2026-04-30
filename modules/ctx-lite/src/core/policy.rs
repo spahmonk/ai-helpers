@@ -1,6 +1,6 @@
-use std::path::Path;
 use crate::core::cache::ReadMode;
 use crate::core::learner::ModeLearner;
+use std::path::Path;
 
 /// Adaptive policy for selecting the best compression mode per file type.
 ///
@@ -47,8 +47,24 @@ impl AdaptivePolicy {
         // Code files: use signatures for consistent compression
         if matches!(
             ext.as_str(),
-            "rs" | "py" | "ts" | "js" | "go" | "java" | "cpp" | "c" | "h" | "hpp" | "cc"
-                | "cxx" | "rb" | "php" | "swift" | "kt" | "scala" | "sh" | "bash"
+            "rs" | "py"
+                | "ts"
+                | "js"
+                | "go"
+                | "java"
+                | "cpp"
+                | "c"
+                | "h"
+                | "hpp"
+                | "cc"
+                | "cxx"
+                | "rb"
+                | "php"
+                | "swift"
+                | "kt"
+                | "scala"
+                | "sh"
+                | "bash"
         ) {
             return ReadMode::Signatures;
         }
@@ -114,10 +130,7 @@ impl AdaptivePolicy {
             return mode;
         }
 
-        let filename = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
         // Check if learner has a recommendation (at least 3 samples)
         if let Some(learned_mode) = learner.get_recommended_mode(filename) {
@@ -368,7 +381,8 @@ mod tests {
         let path = PathBuf::from("test.rs");
 
         // Even with learning, user preference should win
-        let mode = AdaptivePolicy::select_mode_with_learning(&path, 1000, Some(ReadMode::Full), &learner);
+        let mode =
+            AdaptivePolicy::select_mode_with_learning(&path, 1000, Some(ReadMode::Full), &learner);
         assert_eq!(mode.as_str(), "full");
     }
 

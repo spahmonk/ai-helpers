@@ -1,11 +1,10 @@
+use crate::core::minify::CompressedFormat;
 /// Diff Mode: Incremental file diffing for 98%+ compression on re-reads
-/// 
+///
 /// Uses Myers' line-based diffing algorithm to compute minimal deltas
 /// between successive file reads, enabling dramatic compression on unchanged regions.
-
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use crate::core::minify::CompressedFormat;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LineDiff {
@@ -34,9 +33,11 @@ impl DiffResult {
     }
 
     pub fn full_output_size(&self) -> usize {
-        self.diffs.iter()
+        self.diffs
+            .iter()
             .map(|d| d.old_content.len() + d.new_content.len())
-            .sum::<usize>() + 100 // Add overhead for metadata
+            .sum::<usize>()
+            + 100 // Add overhead for metadata
     }
 
     pub fn change_ratio(&self) -> f32 {
@@ -115,9 +116,8 @@ impl DiffMode {
 
         // Calculate compression percentage
         let old_size = old_content.unwrap_or("").len();
-        let diff_size: usize = diffs.iter()
-            .map(|d| d.new_content.len())
-            .sum::<usize>() + (diffs.len() * 20); // 20 bytes overhead per diff
+        let diff_size: usize =
+            diffs.iter().map(|d| d.new_content.len()).sum::<usize>() + (diffs.len() * 20); // 20 bytes overhead per diff
 
         let compression_percent = if old_size > 0 {
             let saved = old_size.saturating_sub(diff_size);

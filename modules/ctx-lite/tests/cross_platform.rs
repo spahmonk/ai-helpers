@@ -1,8 +1,8 @@
+use ctx_lite::core::cache::ReadMode;
+use ctx_lite::core::diff::DiffMode;
 /// Cross-platform compatibility tests for ctx-lite
 /// Ensures consistent behavior across Linux, macOS, and Windows
 use std::path::{Path, PathBuf};
-use ctx_lite::core::cache::ReadMode;
-use ctx_lite::core::diff::DiffMode;
 
 #[test]
 fn test_unix_path_handling() {
@@ -49,13 +49,8 @@ fn test_newline_handling_mixed() {
 #[test]
 fn test_file_extension_case_insensitive() {
     // Filenames should be handled consistently regardless of platform
-    let files = vec![
-        "main.rs",
-        "Main.RS",
-        "MAIN.RS",
-        "main.Rs",
-    ];
-    
+    let files = vec!["main.rs", "Main.RS", "MAIN.RS", "main.Rs"];
+
     for file in files {
         let path = Path::new(file);
         assert!(path.file_name().is_some());
@@ -68,7 +63,7 @@ fn test_unicode_content_consistency() {
     let content_ru = "Привет мир\nПока мир\n";
     let lines: Vec<&str> = content_ru.lines().collect();
     assert_eq!(lines.len(), 2);
-    
+
     let mut differ = DiffMode::new();
     let result = differ.compute_diff(None, content_ru);
     assert!(result.diffs.len() > 0);
@@ -89,7 +84,7 @@ fn test_path_separator_consistency() {
         "src/main.rs",
         "src\\main.rs", // Windows style, but Rust handles both
     ];
-    
+
     for path_str in paths {
         let path = Path::new(path_str);
         assert!(path.to_str().is_some());
@@ -105,7 +100,7 @@ fn test_read_mode_serialization_consistency() {
         ReadMode::Map,
         ReadMode::Diff,
     ];
-    
+
     for mode in modes {
         let mode_str = mode.as_str();
         assert!(mode_str.len() > 0);
@@ -130,17 +125,17 @@ fn test_large_files_consistency() {
     for i in 0..10000 {
         content.push_str(&format!("line {}\n", i));
     }
-    
+
     let mut differ = DiffMode::new();
     let result = differ.compute_diff(None, &content);
-    
+
     // Should complete in reasonable time
     assert!(result.diffs.len() > 0);
-    
+
     // Second read should be fast
     let modified = content.replace("line 5000\n", "line 5000 MODIFIED\n");
     let result2 = differ.compute_diff(Some(&content), &modified);
-    
+
     // Should detect the change efficiently
     assert!(result2.diffs.len() > 0);
     assert!(result2.compression_percent >= 90);
@@ -150,17 +145,17 @@ fn test_large_files_consistency() {
 fn test_performance_consistency() {
     // Ensure performance characteristics are consistent
     let content = "x".repeat(100000); // 100KB of same character
-    
+
     let mut differ = DiffMode::new();
     let start = std::time::Instant::now();
     let result = differ.compute_diff(None, &content);
     let elapsed1 = start.elapsed();
-    
+
     let modified = content.replace("xx", "yy");
     let start2 = std::time::Instant::now();
     let result2 = differ.compute_diff(Some(&content), &modified);
     let elapsed2 = start2.elapsed();
-    
+
     // Second read should be comparable or slightly faster (diff detection)
     // Note: For very repetitive content, the first read might be optimized
     // so we just check that both complete in reasonable time
@@ -172,10 +167,10 @@ fn test_performance_consistency() {
 fn test_timezone_agnostic_timestamps() {
     // Timestamps should work correctly regardless of timezone
     use std::time::SystemTime;
-    
+
     let now = SystemTime::now();
     let later = SystemTime::now();
-    
+
     // Should always be comparable
     assert!(now.duration_since(later).is_ok() || later.duration_since(now).is_ok());
 }
@@ -185,9 +180,9 @@ fn test_concurrent_reads_safety() {
     // Ensure components can be safely used with multiple threads
     use std::sync::Arc;
     use std::sync::Mutex;
-    
+
     let differ = Arc::new(Mutex::new(DiffMode::new()));
-    
+
     // This test just verifies the code compiles and Arc<Mutex> can be created
     // Production testing would spawn actual threads
     let _differ_clone = Arc::clone(&differ);
@@ -197,17 +192,17 @@ fn test_concurrent_reads_safety() {
 fn test_compression_ratio_cross_platform() {
     // Compression ratios should be consistent
     let test_cases = vec![
-        ("", 0),  // Empty
-        ("a", 1), // Single char
+        ("", 0),             // Empty
+        ("a", 1),            // Single char
         ("hello world", 11), // Simple text
     ];
-    
+
     for (content, expected_len) in test_cases {
         let mut differ = DiffMode::new();
         let _result = differ.compute_diff(None, content);
         assert_eq!(content.len(), expected_len);
     }
-    
+
     // Test repetitive content separately
     let repetitive = "a".repeat(100);
     let mut differ = DiffMode::new();

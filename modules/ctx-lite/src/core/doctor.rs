@@ -72,10 +72,7 @@ impl DoctorService {
             DoctorCheck {
                 name: "project_root_exists".to_string(),
                 severity: CheckSeverity::Ok,
-                message: format!(
-                    "Project root exists: {}",
-                    config.project_root.display()
-                ),
+                message: format!("Project root exists: {}", config.project_root.display()),
             }
         }
     }
@@ -123,7 +120,10 @@ impl DoctorService {
             DoctorCheck {
                 name: "shell_policy_presence".to_string(),
                 severity: CheckSeverity::Ok,
-                message: format!("Shell allowlist has {} entries", config.shell_whitelist.len()),
+                message: format!(
+                    "Shell allowlist has {} entries",
+                    config.shell_whitelist.len()
+                ),
             }
         }
     }
@@ -248,7 +248,10 @@ mod tests {
         let report = DoctorService::run(&config);
 
         assert_eq!(report.overall_severity, CheckSeverity::Ok);
-        assert!(report.checks.iter().all(|c| c.severity == CheckSeverity::Ok));
+        assert!(report
+            .checks
+            .iter()
+            .all(|c| c.severity == CheckSeverity::Ok));
     }
 
     #[test]
@@ -267,9 +270,15 @@ mod tests {
         let report = DoctorService::run(&config);
 
         assert!(report.checks.len() >= 3);
-        assert!(report.checks.iter().any(|c| c.name == "project_root_exists"));
+        assert!(report
+            .checks
+            .iter()
+            .any(|c| c.name == "project_root_exists"));
         assert!(report.checks.iter().any(|c| c.name == "storage_sanity"));
-        assert!(report.checks.iter().any(|c| c.name == "shell_policy_presence"));
+        assert!(report
+            .checks
+            .iter()
+            .any(|c| c.name == "shell_policy_presence"));
     }
 
     #[test]
@@ -290,4 +299,3 @@ mod tests {
         assert_eq!(report.overall_severity, CheckSeverity::Error);
     }
 }
-

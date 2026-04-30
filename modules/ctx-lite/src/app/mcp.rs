@@ -234,13 +234,8 @@ where
             .map(|v| v as usize);
 
         let request = ReadRequest { path, max_bytes };
-        let normalized = request
-            .normalize(&self.config)
-            .map_err(|e| e.reason)?;
-        let response = self
-            .read
-            .read(normalized)
-            .map_err(|e| e.message)?;
+        let normalized = request.normalize(&self.config).map_err(|e| e.reason)?;
+        let response = self.read.read(normalized).map_err(|e| e.message)?;
 
         Ok(json!({
             "jsonrpc": "2.0",
@@ -273,13 +268,8 @@ where
             max_depth,
             include_hidden,
         };
-        let normalized = request
-            .normalize(&self.config)
-            .map_err(|e| e.reason)?;
-        let response = self
-            .tree
-            .tree(normalized)
-            .map_err(|e| e.message)?;
+        let normalized = request.normalize(&self.config).map_err(|e| e.reason)?;
+        let response = self.tree.tree(normalized).map_err(|e| e.message)?;
 
         let entries: Vec<Value> = response
             .entries
@@ -316,10 +306,7 @@ where
 
         let request = SearchRequest { query, limit };
         let normalized = request.normalize(&self.config);
-        let response = self
-            .search
-            .search(normalized)
-            .map_err(|e| e.message)?;
+        let response = self.search.search(normalized).map_err(|e| e.message)?;
 
         let hits: Vec<Value> = response
             .hits
@@ -355,13 +342,8 @@ where
             .map(|s| s.to_string());
 
         let request = ShellRequest { command, cwd };
-        let normalized = request
-            .normalize(&self.config)
-            .map_err(|e| e.reason)?;
-        let response = self
-            .shell
-            .shell(normalized)
-            .map_err(|e| e.message)?;
+        let normalized = request.normalize(&self.config).map_err(|e| e.reason)?;
+        let response = self.shell.shell(normalized).map_err(|e| e.message)?;
 
         Ok(json!({
             "jsonrpc": "2.0",
@@ -390,10 +372,7 @@ where
             include_shell_policy,
         };
 
-        let response = self
-            .doctor
-            .doctor(request)
-            .map_err(|e| e.message)?;
+        let response = self.doctor.doctor(request).map_err(|e| e.message)?;
 
         let checks: Vec<Value> = response
             .checks
@@ -427,7 +406,8 @@ mod tests {
         fn read(
             &self,
             _request: crate::app::contracts::ReadRequestNormalized,
-        ) -> Result<crate::app::contracts::ReadResponse, crate::app::contracts::ServiceError> {
+        ) -> Result<crate::app::contracts::ReadResponse, crate::app::contracts::ServiceError>
+        {
             Ok(crate::app::contracts::ReadResponse {
                 path: std::path::PathBuf::from("/test/file.txt"),
                 content: "test content".to_string(),
@@ -442,7 +422,8 @@ mod tests {
         fn tree(
             &self,
             request: crate::app::contracts::TreeRequestNormalized,
-        ) -> Result<crate::app::contracts::TreeResponse, crate::app::contracts::ServiceError> {
+        ) -> Result<crate::app::contracts::TreeResponse, crate::app::contracts::ServiceError>
+        {
             Ok(crate::app::contracts::TreeResponse {
                 root: request.path,
                 entries: vec![],
@@ -455,7 +436,8 @@ mod tests {
         fn search(
             &self,
             request: crate::app::contracts::SearchRequestNormalized,
-        ) -> Result<crate::app::contracts::SearchResponse, crate::app::contracts::ServiceError> {
+        ) -> Result<crate::app::contracts::SearchResponse, crate::app::contracts::ServiceError>
+        {
             Ok(crate::app::contracts::SearchResponse {
                 query: request.query,
                 hits: vec![],
@@ -468,7 +450,8 @@ mod tests {
         fn shell(
             &self,
             request: crate::app::contracts::ShellRequestNormalized,
-        ) -> Result<crate::app::contracts::ShellResponse, crate::app::contracts::ServiceError> {
+        ) -> Result<crate::app::contracts::ShellResponse, crate::app::contracts::ServiceError>
+        {
             Ok(crate::app::contracts::ShellResponse {
                 command: request.command.rendered(),
                 stdout: "shell output".to_string(),
@@ -483,7 +466,8 @@ mod tests {
         fn doctor(
             &self,
             _request: DoctorRequest,
-        ) -> Result<crate::app::contracts::DoctorResponse, crate::app::contracts::ServiceError> {
+        ) -> Result<crate::app::contracts::DoctorResponse, crate::app::contracts::ServiceError>
+        {
             Ok(crate::app::contracts::DoctorResponse {
                 checks: vec![crate::app::contracts::DoctorCheck {
                     name: "test_check".to_string(),

@@ -116,7 +116,11 @@ where
     }
 
     fn handle_tree(&self, args: &[String]) -> CliResult {
-        let path = if args.is_empty() { None } else { Some(args[0].clone()) };
+        let path = if args.is_empty() {
+            None
+        } else {
+            Some(args[0].clone())
+        };
 
         let request = TreeRequest {
             path: path.unwrap_or_default(),
@@ -153,7 +157,8 @@ where
         let query_start = if args[0] == "--mode" {
             if args.len() < 3 {
                 return CliResult {
-                    output: "Error: search with --mode requires a mode and query argument\n".to_string(),
+                    output: "Error: search with --mode requires a mode and query argument\n"
+                        .to_string(),
                     exit_code: 1,
                 };
             }
@@ -241,11 +246,7 @@ fn help_text() -> String {
 }
 
 fn format_read_response(response: &crate::app::contracts::ReadResponse) -> String {
-    format!(
-        "{}\n{}",
-        response.path.display(),
-        response.content
-    )
+    format!("{}\n{}", response.path.display(), response.content)
 }
 
 fn format_tree_response(response: &crate::app::contracts::TreeResponse) -> String {
@@ -277,7 +278,10 @@ fn format_search_response(response: &crate::app::contracts::SearchResponse) -> S
 }
 
 fn format_shell_response(response: &crate::app::contracts::ShellResponse) -> String {
-    format!("$ {}\n{}{}", response.command, response.stdout, response.stderr)
+    format!(
+        "$ {}\n{}{}",
+        response.command, response.stdout, response.stderr
+    )
 }
 
 fn format_doctor_response(response: &crate::app::contracts::DoctorResponse) -> String {

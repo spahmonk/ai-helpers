@@ -76,14 +76,14 @@ impl ShellExecutor {
             .resolve(cwd)
             .map_err(shell_policy_from_path_jail)?;
         let mut child = Command::new(&command.program);
-        
+
         // Harden git commands by disabling config-injection vectors
         let args = if command.program == "git" {
             augment_git_args(&command.args)
         } else {
             command.args.clone()
         };
-        
+
         child
             .args(&args)
             .current_dir(resolved_cwd.path())
@@ -279,12 +279,12 @@ fn augment_git_args(args: &[String]) -> Vec<String> {
         String::from("-c"),
         String::from("diff.external=false"),
     ];
-    
+
     // Add --no-ext-diff for diff commands specifically
     if !args.is_empty() && args[0] == "diff" {
         augmented.push(String::from("--no-ext-diff"));
     }
-    
+
     augmented.extend_from_slice(args);
     augmented
 }

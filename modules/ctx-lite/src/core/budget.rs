@@ -96,7 +96,7 @@ mod tests {
 
         budget.consume(1); // 80.1% - now should trigger WarningThreshold
         assert_eq!(budget.check_status(), BudgetStatus::WarningThreshold);
-        
+
         budget.consume(50); // 85%
         assert_eq!(budget.check_status(), BudgetStatus::WarningThreshold);
     }

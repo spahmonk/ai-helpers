@@ -1,5 +1,5 @@
 /// Pre-compression and format optimization module
-/// 
+///
 /// Implements intelligent minification to reduce protocol overhead and response size.
 /// Supports multiple compression formats to balance compatibility with compression gains.
 
@@ -54,7 +54,9 @@ impl Minifier {
 
         while let Some(ch) = chars.next() {
             // Handle string literals
-            if (ch == '"' || ch == '\'' || ch == '`') && (result.is_empty() || !result.ends_with('\\')) {
+            if (ch == '"' || ch == '\'' || ch == '`')
+                && (result.is_empty() || !result.ends_with('\\'))
+            {
                 if !in_string {
                     in_string = true;
                     string_delimiter = ch;
@@ -84,13 +86,51 @@ impl Minifier {
 
                 // Skip whitespace before specific characters
                 if let Some(&next_ch) = chars.peek() {
-                    if matches!(next_ch, '(' | ')' | '[' | ']' | '{' | '}' | ':' | ';' | ',' | '=' | '>' | '<' | '+' | '-' | '*' | '/' | '&' | '|' | '!') {
+                    if matches!(
+                        next_ch,
+                        '(' | ')'
+                            | '['
+                            | ']'
+                            | '{'
+                            | '}'
+                            | ':'
+                            | ';'
+                            | ','
+                            | '='
+                            | '>'
+                            | '<'
+                            | '+'
+                            | '-'
+                            | '*'
+                            | '/'
+                            | '&'
+                            | '|'
+                            | '!'
+                    ) {
                         continue;
                     }
                 }
 
                 // Skip whitespace after specific characters
-                if matches!(result.chars().last(), Some('(' | '[' | '{' | ':' | ',' | '=' | '>' | '<' | '+' | '-' | '*' | '/' | '&' | '|' | '!')) {
+                if matches!(
+                    result.chars().last(),
+                    Some(
+                        '(' | '['
+                            | '{'
+                            | ':'
+                            | ','
+                            | '='
+                            | '>'
+                            | '<'
+                            | '+'
+                            | '-'
+                            | '*'
+                            | '/'
+                            | '&'
+                            | '|'
+                            | '!'
+                    )
+                ) {
                     continue;
                 }
 
@@ -112,7 +152,7 @@ impl Minifier {
     /// Example: "pub fn foo ( ) -> String" → "pub fn foo()->String"
     pub fn minify_rust_signature(sig: &str) -> String {
         let mut minified = Self::minify(sig);
-        
+
         // Normalize common Rust patterns
         minified = minified.replace(" -> ", "->");
         minified = minified.replace(" : ", ":");
@@ -120,7 +160,7 @@ impl Minifier {
         minified = minified.replace(" >", ">");
         minified = minified.replace(" , ", ",");
         minified = minified.replace(" ; ", ";");
-        
+
         minified
     }
 
@@ -128,7 +168,7 @@ impl Minifier {
     /// Example: "def foo ( x : int ) -> str :" → "def foo(x:int)->str:"
     pub fn minify_python_signature(sig: &str) -> String {
         let mut minified = Self::minify(sig);
-        
+
         // Normalize Python patterns
         minified = minified.replace(" -> ", "->");
         minified = minified.replace(" : ", ":");
@@ -136,16 +176,16 @@ impl Minifier {
         minified = minified.replace("( ", "(");
         minified = minified.replace(" )", ")");
         minified = minified.replace(": ", ":");
-        
+
         minified
     }
 
     /// Minify JavaScript/TypeScript function signatures
-    /// Example: "async function foo ( x : number ) : Promise < string >" 
+    /// Example: "async function foo ( x : number ) : Promise < string >"
     /// → "async function foo(x:number):Promise<string>"
     pub fn minify_js_signature(sig: &str) -> String {
         let mut minified = Self::minify(sig);
-        
+
         // Normalize JavaScript patterns
         minified = minified.replace(" : ", ":");
         minified = minified.replace(" , ", ",");
@@ -155,7 +195,7 @@ impl Minifier {
         minified = minified.replace(" >", ">");
         minified = minified.replace("{ ", "{");
         minified = minified.replace(" }", "}");
-        
+
         minified
     }
 
@@ -289,9 +329,10 @@ mod tests {
 
     #[test]
     fn test_minify_complex_rust_signature() {
-        let input = "pub async fn compute < T : Clone > ( items : Vec < T > ) -> Result < T , Error >";
+        let input =
+            "pub async fn compute < T : Clone > ( items : Vec < T > ) -> Result < T , Error >";
         let result = Minifier::minify_rust_signature(input);
-        
+
         // Check that spacing is reduced
         let spaces_before = input.matches(' ').count();
         let spaces_after = result.matches(' ').count();
@@ -303,7 +344,7 @@ mod tests {
         let original = "pub  fn   foo  (  )  ->  String";
         let minified = Minifier::minify_rust_signature(original);
         let percent = Minifier::compression_percent(original, &minified);
-        
+
         assert!(percent > 0, "Should calculate positive compression");
         assert!(percent <= 100, "Should not exceed 100%");
     }
@@ -314,11 +355,23 @@ mod tests {
         assert_eq!(CompressedFormat::Minified.as_str(), "minified");
         assert_eq!(CompressedFormat::Packed.as_str(), "packed");
         assert_eq!(CompressedFormat::Gzip.as_str(), "gzip");
-        
-        assert_eq!(CompressedFormat::from_str("full"), Some(CompressedFormat::Full));
-        assert_eq!(CompressedFormat::from_str("minified"), Some(CompressedFormat::Minified));
-        assert_eq!(CompressedFormat::from_str("packed"), Some(CompressedFormat::Packed));
-        assert_eq!(CompressedFormat::from_str("gzip"), Some(CompressedFormat::Gzip));
+
+        assert_eq!(
+            CompressedFormat::from_str("full"),
+            Some(CompressedFormat::Full)
+        );
+        assert_eq!(
+            CompressedFormat::from_str("minified"),
+            Some(CompressedFormat::Minified)
+        );
+        assert_eq!(
+            CompressedFormat::from_str("packed"),
+            Some(CompressedFormat::Packed)
+        );
+        assert_eq!(
+            CompressedFormat::from_str("gzip"),
+            Some(CompressedFormat::Gzip)
+        );
         assert_eq!(CompressedFormat::from_str("invalid"), None);
     }
 
@@ -349,7 +402,7 @@ mod tests {
     fn test_minify_preserves_semantic_meaning() {
         let rust_sig = "fn add(x: i32, y: i32) -> i32";
         let minified = Minifier::minify_rust_signature(rust_sig);
-        
+
         // Extract key parts: function name, param names, types, return type
         assert!(minified.contains("add"));
         assert!(minified.contains("x"));

@@ -1,6 +1,6 @@
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -214,14 +214,7 @@ mod tests {
             let path = Path::new(&path_str);
             let content = format!("content{}", i);
             let result = format!("result{}", i);
-            cache.insert(
-                path,
-                content.clone(),
-                result,
-                50,
-                mode,
-                now,
-            );
+            cache.insert(path, content.clone(), result, 50, mode, now);
         }
 
         assert_eq!(cache.size(), 3);

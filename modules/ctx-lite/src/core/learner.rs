@@ -1,8 +1,7 @@
 /// ML-Based Mode Selection: Learns from compression results to optimize mode selection
-/// 
+///
 /// Tracks compression effectiveness per file pattern and learns which modes work best
 /// for different file types. Stores learned data persistently in ~/.ctx-lite/mode-learning.json
-
 use crate::core::cache::ReadMode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -56,9 +55,9 @@ impl FilePattern {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ModeRecord {
     pub mode: String,
-    pub successes: usize,      // Count of reads with compression >= threshold
-    pub failures: usize,       // Count of reads with compression < threshold
-    pub avg_compression: f32,  // Average compression percent across all reads
+    pub successes: usize,        // Count of reads with compression >= threshold
+    pub failures: usize,         // Count of reads with compression < threshold
+    pub avg_compression: f32,    // Average compression percent across all reads
     pub best_compression: usize, // Best compression achieved
 }
 
@@ -151,21 +150,18 @@ impl ModeLearner {
     /// Get path to learner storage file
     fn learner_path() -> PathBuf {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-        PathBuf::from(home).join(".ctx-lite").join("mode-learning.json")
+        PathBuf::from(home)
+            .join(".ctx-lite")
+            .join("mode-learning.json")
     }
 
     /// Learn from a compression result
-    /// 
+    ///
     /// # Arguments
     /// * `filename` - The filename to learn from
     /// * `mode` - The mode that was used
     /// * `compression_percent` - The actual compression achieved
-    pub fn learn_mode(
-        &mut self,
-        filename: &str,
-        mode: ReadMode,
-        compression_percent: usize,
-    ) {
+    pub fn learn_mode(&mut self, filename: &str, mode: ReadMode, compression_percent: usize) {
         let pattern = Self::extract_pattern(filename);
         let pattern_str = pattern.pattern.clone();
         let mode_str = mode.as_str().to_string();
@@ -203,7 +199,8 @@ impl ModeLearner {
 
         // Calculate new average
         let new_total = (mode_record.successes + mode_record.failures) as f32;
-        mode_record.avg_compression = (old_avg * old_total + compression_percent as f32) / new_total;
+        mode_record.avg_compression =
+            (old_avg * old_total + compression_percent as f32) / new_total;
 
         // Track best compression
         mode_record.best_compression = mode_record.best_compression.max(compression_percent);
@@ -238,7 +235,13 @@ impl ModeLearner {
         if let Some(pattern_learning) = self.patterns.get(&ext_pattern) {
             if let Some(mode) = pattern_learning.get_recommended_mode() {
                 // Only return if we have enough learning (at least 3 attempts)
-                if pattern_learning.modes.values().map(|m| m.total_attempts()).sum::<usize>() >= 3 {
+                if pattern_learning
+                    .modes
+                    .values()
+                    .map(|m| m.total_attempts())
+                    .sum::<usize>()
+                    >= 3
+                {
                     return Some(mode);
                 }
             }
@@ -250,7 +253,7 @@ impl ModeLearner {
     /// Extract a pattern from a filename
     fn extract_pattern(filename: &str) -> FilePattern {
         let path = Path::new(filename);
-        
+
         // Get extension
         if let Some(ext) = path.extension() {
             if let Some(ext_str) = ext.to_str() {
@@ -425,8 +428,14 @@ mod tests {
         learner.learn_mode("script.sh", ReadMode::Signatures, 82);
         learner.learn_mode("script.sh", ReadMode::Signatures, 78);
 
-        assert_eq!(learner.get_recommended_mode("settings.json"), Some(ReadMode::Map));
-        assert_eq!(learner.get_recommended_mode("deploy.sh"), Some(ReadMode::Signatures));
+        assert_eq!(
+            learner.get_recommended_mode("settings.json"),
+            Some(ReadMode::Map)
+        );
+        assert_eq!(
+            learner.get_recommended_mode("deploy.sh"),
+            Some(ReadMode::Signatures)
+        );
     }
 
     #[test]
