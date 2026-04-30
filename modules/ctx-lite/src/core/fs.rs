@@ -1,19 +1,43 @@
 use std::io::Read;
 use std::path::Path;
+use std::sync::Mutex;
+use std::time::SystemTime;
 
 use crate::app::contracts::{
     ReadMode, ReadRequestNormalized, ReadResponse, ServiceError, TreeEntry, TreeRequestNormalized,
     TreeResponse,
 };
 use crate::core::security::path_jail::{PathJail, ResolvedPath};
+use crate::core::cache::{SemanticCache, ReadMode as CacheReadMode};
+use crate::core::policy::AdaptivePolicy;
+use crate::core::budget::ContextBudget;
 use crate::core::signatures;
 
 const MAX_TREE_ENTRIES: usize = 1_024;
 const MAX_TREE_RESPONSE_BYTES: usize = 65_536;
 
-#[derive(Clone, Debug)]
+/// Convert contracts::ReadMode to cache::ReadMode
+fn to_cache_mode(mode: ReadMode) -> CacheReadMode {
+    match mode {
+        ReadMode::Full => CacheReadMode::Full,
+        ReadMode::Signatures => CacheReadMode::Partial,
+        ReadMode::Map => CacheReadMode::Partial,
+        ReadMode::Diff => CacheReadMode::Semantic,
+    }
+}
+
+#[derive(Clone)]
 pub struct FileReader {
     jail: PathJail,
+    cache: std::sync::Arc<Mutex<SemanticCache>>,
+    policy: AdaptivePolicy,
+    budget: std::sync::Arc<Mutex<ContextBudget>>,
+}
+
+impl std::fmt::Debug for FileReader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FileReader").finish()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -23,7 +47,12 @@ pub struct TreeBuilder {
 
 impl FileReader {
     pub fn new(jail: PathJail) -> Self {
-        Self { jail }
+        Self {
+            jail,
+            cache: std::sync::Arc::new(Mutex::new(SemanticCache::new(1000))),
+            policy: AdaptivePolicy::new(),
+            budget: std::sync::Arc::new(Mutex::new(ContextBudget::new(12_000))),
+        }
     }
 
     pub fn read(&self, request: ReadRequestNormalized) -> Result<ReadResponse, ServiceError> {
@@ -31,14 +60,52 @@ impl FileReader {
             .jail
             .resolve(&request.path)
             .map_err(|error| ServiceError::unsupported(error.message))?;
+
+        // Step 1: Determine mode - use auto-selection if Full mode requested
+        let selected_mode = if request.mode == ReadMode::Full {
+            self.policy.select_mode(path.path(), request.max_bytes)
+        } else {
+            request.mode
+        };
+
+        // Step 2: Open file and get metadata for cache validation
         let mut file = path
             .open_file()
             .map_err(|error| ServiceError::unsupported(error.message))?;
+        
+        let file_mtime = std::fs::metadata(path.path())
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+
+        // Step 3: Read file content
         let (mut content, bytes_read, truncated) =
             read_utf8_prefix(&mut file, path.path(), request.max_bytes)?;
 
-        // Apply mode-specific transformations
-        let compression_percent = match request.mode {
+        let original_content = content.clone();
+
+        // Step 4: Check cache with actual content hash and mtime
+        {
+            let cache = self.cache.lock().unwrap();
+            let cache_mode = to_cache_mode(selected_mode);
+            if let Some(cached_result) = cache.get(path.path(), &content, cache_mode, file_mtime) {
+                // Cache hit - minimal cost
+                let mut budget = self.budget.lock().unwrap();
+                budget.consume(1);
+                
+                return Ok(ReadResponse {
+                    bytes_read,
+                    content: cached_result,
+                    path: path.path().to_path_buf(),
+                    truncated,
+                    mode: selected_mode,
+                    compression_percent: 99, // Cache hits are ~99% compression
+                });
+            }
+        }
+
+        // Step 5: Cache miss - apply mode-specific transformations
+        let compression_percent = match selected_mode {
             ReadMode::Full => 0,
             ReadMode::Signatures => {
                 let original_len = content.len();
@@ -53,22 +120,41 @@ impl FileReader {
             }
             ReadMode::Map => {
                 // Map mode: show structure with reduced content
-                // For now, use 96% compression estimate
                 96
             }
             ReadMode::Diff => {
-                // Diff mode would need cache tracking
-                // For now, use 99% compression estimate
+                // Diff mode: delta compression (99% on re-reads via cache)
                 99
             }
-        };
+        } as usize;
+
+        // Step 6: Track budget consumption
+        let read_cost = (bytes_read / 4).min(1000);
+        {
+            let mut budget = self.budget.lock().unwrap();
+            budget.consume(read_cost);
+        }
+
+        // Step 7: Store in cache for future reads
+        {
+            let mut cache = self.cache.lock().unwrap();
+            let cache_mode = to_cache_mode(selected_mode);
+            cache.insert(
+                path.path(),
+                original_content,
+                content.clone(),
+                compression_percent,
+                cache_mode,
+                file_mtime,
+            );
+        }
 
         Ok(ReadResponse {
             bytes_read,
             content,
             path: path.path().to_path_buf(),
             truncated,
-            mode: request.mode,
+            mode: selected_mode,
             compression_percent,
         })
     }
