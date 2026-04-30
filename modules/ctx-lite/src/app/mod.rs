@@ -1,6 +1,6 @@
 pub mod cli;
 pub mod contracts;
-// pub mod mcp;  // TODO: fix MCP adapter - has pre-existing compilation errors
+pub mod mcp;
 
 use self::contracts::{DoctorService, ReadService, SearchService, ShellService, TreeService};
 use crate::core::config::AppConfig;

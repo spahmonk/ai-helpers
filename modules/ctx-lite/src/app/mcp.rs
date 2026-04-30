@@ -58,7 +58,7 @@ where
         }
 
         let request: Value = serde_json::from_str(&buffer)?;
-        let response = self.handle_request(&request);
+        let response = self.handle_request(&request)?;
         let output = serde_json::to_string(&response)?;
         io::stdout().write_all(output.as_bytes())?;
         io::stdout().flush()?;
@@ -66,39 +66,22 @@ where
         Ok(())
     }
 
-    fn handle_request(&self, request: &Value) -> Value {
-        let method = match request.get("method").and_then(|v| v.as_str()) {
-            Some(m) => m,
-            None => return self.json_rpc_error(-32600, "Invalid Request"),
-        };
+    fn handle_request(&self, request: &Value) -> Result<Value, Box<dyn std::error::Error>> {
+        let method = request
+            .get("method")
+            .and_then(|v| v.as_str())
+            .ok_or("Missing method")?;
 
         match method {
             "initialize" => self.handle_initialize(),
             "tools/list" => self.handle_list_tools(),
             "tools/call" => self.handle_call_tool(request),
-            _ => self.json_rpc_error(-32601, "Method not found"),
+            _ => Err("Unknown method".into()),
         }
     }
 
-    fn json_rpc_error(&self, code: i32, message: &str) -> Value {
-        json!({
-            "jsonrpc": "2.0",
-            "error": {
-                "code": code,
-                "message": message
-            }
-        })
-    }
-
-    fn json_rpc_result(&self, result: Value) -> Value {
-        json!({
-            "jsonrpc": "2.0",
-            "result": result
-        })
-    }
-
-    fn handle_initialize(&self) -> Value {
-        json!({
+    fn handle_initialize(&self) -> Result<Value, Box<dyn std::error::Error>> {
+        Ok(json!({
             "jsonrpc": "2.0",
             "result": {
                 "protocolVersion": "2024-11-05",
@@ -110,11 +93,11 @@ where
                     "version": "0.1.0"
                 }
             }
-        })
+        }))
     }
 
-    fn handle_list_tools(&self) -> Value {
-        json!({
+    fn handle_list_tools(&self) -> Result<Value, Box<dyn std::error::Error>> {
+        Ok(json!({
             "jsonrpc": "2.0",
             "result": {
                 "tools": [
@@ -213,7 +196,7 @@ where
                     }
                 ]
             }
-        })
+        }))
     }
 
     fn handle_call_tool(&self, request: &Value) -> Result<Value, Box<dyn std::error::Error>> {
