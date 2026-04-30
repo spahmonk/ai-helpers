@@ -8,7 +8,7 @@
   },
   "scripts": {
     "postinstall": "node bin/download-binary.js || true",
-    "test": "cd modules/ctx-lite && cargo test --release",
+    "test": "node --test test/npm-wrapper.test.mjs && cd modules/ctx-lite && cargo test --release",
     "build": "cd modules/ctx-lite && cargo build --release"
   },
   "keywords": [
@@ -22,7 +22,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/spahmonk/ai-helpers.git",
+    "url": "git+https://github.com/spahmonk/ai-helpers.git",
     "directory": "."
   },
   "homepage": "https://github.com/spahmonk/ai-helpers#readme",
@@ -31,7 +31,7 @@
   },
   "license": "MIT",
   "engines": {
-    "node": ">=12.0.0"
+    "node": ">=18.0.0"
   },
   "author": "Copilot",
   "preferGlobal": true,

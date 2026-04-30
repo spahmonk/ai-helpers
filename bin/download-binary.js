@@ -8,11 +8,17 @@
  * This makes the first run of npx much faster.
  */
 
-import { execSync } from 'child_process';
-import { existsSync, mkdirSync } from 'fs';
+import { execFileSync } from 'child_process';
+import { existsSync, mkdirSync, rmSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { platform, arch } from 'os';
+import {
+  buildDownloadUrl,
+  getCacheDirectory,
+  getExtractionCommand,
+  getTempArchiveName,
+} from './release-assets.js';
 
 function getPlatformArchitecture() {
   const plat = platform();
@@ -37,7 +43,7 @@ function getBinaryName(platformArch) {
 }
 
 function getCacheDir() {
-  return join(homedir(), '.ctx-lite-cache');
+  return getCacheDirectory(homedir());
 }
 
 function getBinaryPath(platformArch) {
@@ -45,9 +51,7 @@ function getBinaryPath(platformArch) {
 }
 
 function downloadBinary(platformArch) {
-  const version = '1.0.0';
-  const repo = 'spahmonk/ai-helpers';
-  const downloadUrl = `https://github.com/${repo}/releases/download/v${version}/ctx-lite-${version}-${platformArch}.tar.gz`;
+  const downloadUrl = buildDownloadUrl(platformArch);
   const binaryPath = getBinaryPath(platformArch);
   const cacheDir = getCacheDir();
 
@@ -62,13 +66,14 @@ function downloadBinary(platformArch) {
 
   try {
     console.log(`ℹ️  Pre-downloading ctx-lite for faster first run...`);
-    const tempFile = join(cacheDir, 'ctx-lite.tar.gz');
-    execSync(`curl -fsSL "${downloadUrl}" -o "${tempFile}"`, { stdio: 'pipe' });
-    execSync(`tar -xzf "${tempFile}" -C "${cacheDir}"`, { stdio: 'pipe' });
-    execSync(`rm "${tempFile}"`, { stdio: 'pipe' });
+    const tempFile = join(cacheDir, getTempArchiveName(platformArch));
+    execFileSync('curl', ['-fsSL', downloadUrl, '-o', tempFile], { stdio: 'pipe' });
+    const extraction = getExtractionCommand(platformArch, tempFile, cacheDir);
+    execFileSync(extraction.file, extraction.args, { stdio: 'pipe' });
+    rmSync(tempFile, { force: true });
 
     if (!platformArch.includes('windows')) {
-      execSync(`chmod +x "${binaryPath}"`, { stdio: 'pipe' });
+      execFileSync('chmod', ['+x', binaryPath], { stdio: 'pipe' });
     }
 
     console.log(`✓ ctx-lite cached successfully`);

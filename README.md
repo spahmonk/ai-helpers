@@ -18,7 +18,7 @@ curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/in
 powershell -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.ps1'))"
 ```
 
-### npm (if Node.js installed)
+### npm (Node.js 18+)
 ```bash
 npm install -g @spahmonk/ctx-lite
 ```

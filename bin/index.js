@@ -9,10 +9,16 @@
  */
 
 import { execFileSync, spawnSync } from 'child_process';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, rmSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import { platform, arch } from 'os';
+import {
+  buildDownloadUrl,
+  getCacheDirectory,
+  getExtractionCommand,
+  getTempArchiveName,
+} from './release-assets.js';
 
 function getPlatformArchitecture() {
   const plat = platform();
@@ -43,7 +49,7 @@ function getBinaryName(platformArch) {
 }
 
 function getCacheDir() {
-  return join(homedir(), '.ctx-lite-cache');
+  return getCacheDirectory(homedir());
 }
 
 function getBinaryPath(platformArch) {
@@ -61,9 +67,7 @@ function binaryExists(binaryPath) {
 }
 
 async function downloadBinary(platformArch) {
-  const version = '1.0.0';
-  const repo = 'spahmonk/ai-helpers';
-  const downloadUrl = `https://github.com/${repo}/releases/download/v${version}/ctx-lite-${version}-${platformArch}.tar.gz`;
+  const downloadUrl = buildDownloadUrl(platformArch);
   const binaryPath = getBinaryPath(platformArch);
   const cacheDir = getCacheDir();
 
@@ -74,10 +78,11 @@ async function downloadBinary(platformArch) {
   }
 
   try {
-    const tempFile = join(cacheDir, 'ctx-lite.tar.gz');
+    const tempFile = join(cacheDir, getTempArchiveName(platformArch));
     execFileSync('curl', ['-fsSL', downloadUrl, '-o', tempFile], { stdio: 'inherit' });
-    execFileSync('tar', ['-xzf', tempFile, '-C', cacheDir], { stdio: 'inherit' });
-    execFileSync('rm', [tempFile], { stdio: 'inherit' });
+    const extraction = getExtractionCommand(platformArch, tempFile, cacheDir);
+    execFileSync(extraction.file, extraction.args, { stdio: 'inherit' });
+    rmSync(tempFile, { force: true });
 
     if (!platformArch.includes('windows')) {
       execFileSync('chmod', ['+x', binaryPath], { stdio: 'inherit' });
@@ -86,7 +91,7 @@ async function downloadBinary(platformArch) {
     console.log(`✓ Downloaded and cached at ${binaryPath}`);
   } catch (error) {
     console.error(`✗ Failed to download binary from ${downloadUrl}`);
-    console.error(`Please ensure version ${version} is released on GitHub.`);
+    console.error('Please ensure the matching GitHub release assets exist.');
     process.exit(1);
   }
 }
