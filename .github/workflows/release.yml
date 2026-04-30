@@ -51,21 +51,21 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: repo/.worktrees/ctx-lite-mcp
+          workspaces: repo/modules/ctx-lite
 
       - name: Build release binary
-        working-directory: repo/.worktrees/ctx-lite-mcp
+        working-directory: repo/modules/ctx-lite
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Strip binary (Unix)
         if: runner.os != 'Windows'
-        working-directory: repo/.worktrees/ctx-lite-mcp
+        working-directory: repo/modules/ctx-lite
         run: |
           strip target/${{ matrix.target }}/release/ctx-lite || true
 
       - name: Create archive (Unix)
         if: runner.os != 'Windows'
-        working-directory: repo/.worktrees/ctx-lite-mcp
+        working-directory: repo/modules/ctx-lite
         run: |
           version="${{ github.ref }}" && version="${version#refs/tags/v}"
           tar czf ctx-lite-${version}-${{ matrix.target }}.tar.gz \
@@ -74,7 +74,7 @@ jobs:
 
       - name: Create archive (Windows)
         if: runner.os == 'Windows'
-        working-directory: repo/.worktrees/ctx-lite-mcp
+        working-directory: repo/modules/ctx-lite
         shell: powershell
         run: |
           $version = "${{ github.ref }}".substring("refs/tags/v".length)
@@ -83,14 +83,14 @@ jobs:
           Get-Item $archive | Format-List Length
 
       - name: Test binary
-        working-directory: repo/.worktrees/ctx-lite-mcp
+        working-directory: repo/modules/ctx-lite
         run: ./target/${{ matrix.target }}/release/${{ matrix.artifact_name }} --help
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: binaries
-          path: repo/.worktrees/ctx-lite-mcp/ctx-lite-*
+          path: repo/modules/ctx-lite/ctx-lite-*
           if-no-files-found: error
 
   create-release:
