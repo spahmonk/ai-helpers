@@ -6,9 +6,9 @@ use std::time::{SystemTime, Duration};
 use std::thread;
 
 // NOTE: The SemanticCache API has semantics where:
-// - insert(path, stored_value, cache_key_source, compression, mode, mtime)
-// - get(path, cache_key_source, mode, mtime) -> stored_value
-// For a cache hit, the cache_key_source must be the same in both insert and get
+// - insert(path, content, result, compression, mode, mtime)
+// - get(path, content, mode, mtime) -> result
+// For a cache hit, the content (what gets hashed for the cache key) must be the same in both insert and get
 
 // ============================================================================
 // Cache Functionality Tests (15 tests)
@@ -18,14 +18,14 @@ use std::thread;
 fn cache_insert_and_get_basic() {
     let mut cache = SemanticCache::new(100);
     let path = PathBuf::from("test.rs");
-    let cache_key = "cache_key_1";
+    let content = "fn main() { println!(\"Hello\"); }";
     let stored_value = "cached_result";
     let now = SystemTime::now();
     
-    // insert(path, value, key, compression, mode, mtime)
-    cache.insert(&path, stored_value.to_string(), cache_key.to_string(), 50, ReadMode::Full, now);
+    // insert(path, content, result, compression, mode, mtime)
+    cache.insert(&path, content.to_string(), stored_value.to_string(), 50, ReadMode::Full, now);
     
-    let result = cache.get(&path, cache_key, ReadMode::Full, now);
+    let result = cache.get(&path, content, ReadMode::Full, now);
     assert!(result.is_some());
     assert_eq!(result.unwrap(), stored_value);
 }
@@ -34,7 +34,7 @@ fn cache_insert_and_get_basic() {
 fn cache_get_returns_none_for_missing_key() {
     let cache = SemanticCache::new(100);
     let path = PathBuf::from("test.rs");
-    let result = cache.get(&path, "nonexistent_key", ReadMode::Full, SystemTime::now());
+    let result = cache.get(&path, "nonexistent_content", ReadMode::Full, SystemTime::now());
     assert!(result.is_none());
 }
 
@@ -42,19 +42,19 @@ fn cache_get_returns_none_for_missing_key() {
 fn cache_different_read_modes_are_separate_entries() {
     let mut cache = SemanticCache::new(100);
     let path = PathBuf::from("test.rs");
-    let cache_key = "same_key";
+    let content = "fn main() {}";
     let value_full = "value_for_full_mode";
-    let value_partial = "value_for_partial_mode";
+    let value_signatures = "value_for_signatures_mode";
     let now = SystemTime::now();
     
-    cache.insert(&path, value_full.to_string(), cache_key.to_string(), 50, ReadMode::Full, now);
-    cache.insert(&path, value_partial.to_string(), cache_key.to_string(), 80, ReadMode::Signatures, now);
+    cache.insert(&path, content.to_string(), value_full.to_string(), 50, ReadMode::Full, now);
+    cache.insert(&path, content.to_string(), value_signatures.to_string(), 80, ReadMode::Signatures, now);
     
-    let full_result = cache.get(&path, cache_key, ReadMode::Full, now);
-    let partial_result = cache.get(&path, cache_key, ReadMode::Signatures, now);
+    let full_result = cache.get(&path, content, ReadMode::Full, now);
+    let sig_result = cache.get(&path, content, ReadMode::Signatures, now);
     
     assert_eq!(full_result.unwrap(), value_full);
-    assert_eq!(partial_result.unwrap(), value_partial);
+    assert_eq!(sig_result.unwrap(), value_signatures);
 }
 
 #[test]
@@ -62,22 +62,23 @@ fn cache_size_tracking() {
     let mut cache = SemanticCache::new(100);
     assert_eq!(cache.size(), 0);
     
-    cache.insert(&PathBuf::from("f1.rs"), "v1".to_string(), "k1".to_string(), 50, ReadMode::Full, SystemTime::now());
+    cache.insert(&PathBuf::from("f1.rs"), "content1".to_string(), "result1".to_string(), 50, ReadMode::Full, SystemTime::now());
     assert_eq!(cache.size(), 1);
     
-    cache.insert(&PathBuf::from("f2.py"), "v2".to_string(), "k2".to_string(), 40, ReadMode::Full, SystemTime::now());
+    cache.insert(&PathBuf::from("f2.py"), "content2".to_string(), "result2".to_string(), 40, ReadMode::Full, SystemTime::now());
     assert_eq!(cache.size(), 2);
 }
 
 #[test]
 fn cache_clear() {
     let mut cache = SemanticCache::new(100);
-    cache.insert(&PathBuf::from("f1.rs"), "v1".to_string(), "k1".to_string(), 50, ReadMode::Full, SystemTime::now());
-    cache.insert(&PathBuf::from("f2.py"), "v2".to_string(), "k2".to_string(), 40, ReadMode::Full, SystemTime::now());
+    let now = SystemTime::now();
+    cache.insert(&PathBuf::from("f1.rs"), "content1".to_string(), "result1".to_string(), 50, ReadMode::Full, now);
+    cache.insert(&PathBuf::from("f2.py"), "content2".to_string(), "result2".to_string(), 40, ReadMode::Full, now);
     
     cache.clear();
     assert_eq!(cache.size(), 0);
-    assert!(cache.get(&PathBuf::from("f1.rs"), "k1", ReadMode::Full, SystemTime::now()).is_none());
+    assert!(cache.get(&PathBuf::from("f1.rs"), "content1", ReadMode::Full, now).is_none());
 }
 
 #[test]
@@ -86,39 +87,39 @@ fn cache_lru_eviction_on_capacity_exceeded() {
     let now = SystemTime::now();
     
     let time1 = now;
-    cache.insert(&PathBuf::from("f1.rs"), "v1".to_string(), "k1".to_string(), 50, ReadMode::Full, time1);
+    cache.insert(&PathBuf::from("f1.rs"), "content1".to_string(), "result1".to_string(), 50, ReadMode::Full, time1);
     
     let time2 = time1 + Duration::from_secs(1);
-    cache.insert(&PathBuf::from("f2.py"), "v2".to_string(), "k2".to_string(), 40, ReadMode::Full, time2);
+    cache.insert(&PathBuf::from("f2.py"), "content2".to_string(), "result2".to_string(), 40, ReadMode::Full, time2);
     
     assert_eq!(cache.size(), 2);
     
     let time3 = time2 + Duration::from_secs(1);
-    cache.insert(&PathBuf::from("f3.ts"), "v3".to_string(), "k3".to_string(), 60, ReadMode::Full, time3);
+    cache.insert(&PathBuf::from("f3.ts"), "content3".to_string(), "result3".to_string(), 60, ReadMode::Full, time3);
     
     assert_eq!(cache.size(), 2);
     // First entry (oldest) should be evicted
-    assert!(cache.get(&PathBuf::from("f1.rs"), "k1", ReadMode::Full, time1).is_none());
-    assert!(cache.get(&PathBuf::from("f2.py"), "k2", ReadMode::Full, time2).is_some());
-    assert!(cache.get(&PathBuf::from("f3.ts"), "k3", ReadMode::Full, time3).is_some());
+    assert!(cache.get(&PathBuf::from("f1.rs"), "content1", ReadMode::Full, time1).is_none());
+    assert!(cache.get(&PathBuf::from("f2.py"), "content2", ReadMode::Full, time2).is_some());
+    assert!(cache.get(&PathBuf::from("f3.ts"), "content3", ReadMode::Full, time3).is_some());
 }
 
 #[test]
 fn cache_mtime_invalidation() {
     let mut cache = SemanticCache::new(100);
     let path = PathBuf::from("test.rs");
-    let cache_key = "key1";
-    let value = "result";
+    let content = "fn main() {}";
+    let result = "processed";
     
     let now = SystemTime::now();
-    cache.insert(&path, value.to_string(), cache_key.to_string(), 50, ReadMode::Full, now);
+    cache.insert(&path, content.to_string(), result.to_string(), 50, ReadMode::Full, now);
     
     // Get with same mtime - should hit
-    assert!(cache.get(&path, cache_key, ReadMode::Full, now).is_some());
+    assert!(cache.get(&path, content, ReadMode::Full, now).is_some());
     
     // Get with different mtime - should miss
     let later = now + Duration::from_secs(10);
-    assert!(cache.get(&path, cache_key, ReadMode::Full, later).is_none());
+    assert!(cache.get(&path, content, ReadMode::Full, later).is_none());
 }
 
 #[test]
@@ -126,11 +127,11 @@ fn cache_multiple_paths_different_keys() {
     let mut cache = SemanticCache::new(100);
     let now = SystemTime::now();
     
-    cache.insert(&PathBuf::from("file1.rs"), "result1".to_string(), "key1".to_string(), 50, ReadMode::Full, now);
-    cache.insert(&PathBuf::from("file2.rs"), "result2".to_string(), "key2".to_string(), 40, ReadMode::Full, now);
+    cache.insert(&PathBuf::from("file1.rs"), "content1".to_string(), "result1".to_string(), 50, ReadMode::Full, now);
+    cache.insert(&PathBuf::from("file2.rs"), "content2".to_string(), "result2".to_string(), 40, ReadMode::Full, now);
     
-    assert!(cache.get(&PathBuf::from("file1.rs"), "key1", ReadMode::Full, now).is_some());
-    assert!(cache.get(&PathBuf::from("file2.rs"), "key2", ReadMode::Full, now).is_some());
+    assert!(cache.get(&PathBuf::from("file1.rs"), "content1", ReadMode::Full, now).is_some());
+    assert!(cache.get(&PathBuf::from("file2.rs"), "content2", ReadMode::Full, now).is_some());
     assert_eq!(cache.size(), 2);
 }
 
@@ -138,19 +139,19 @@ fn cache_multiple_paths_different_keys() {
 fn cache_all_read_modes() {
     let mut cache = SemanticCache::new(100);
     let path = PathBuf::from("test.rs");
-    let cache_key = "key";
+    let content = "shared_content";
     let modes = vec![ReadMode::Full, ReadMode::Signatures, ReadMode::Diff];
     let now = SystemTime::now();
     
     for (i, mode) in modes.iter().enumerate() {
-        let value = format!("result_{}", i);
-        cache.insert(&path, value.clone(), cache_key.to_string(), 50 + i * 10, *mode, now);
+        let result = format!("result_{}", i);
+        cache.insert(&path, content.to_string(), result, 50 + i * 10, *mode, now);
     }
     
     assert_eq!(cache.size(), 3);
     
     for mode in modes {
-        assert!(cache.get(&path, cache_key, mode, now).is_some());
+        assert!(cache.get(&path, content, mode, now).is_some());
     }
 }
 
@@ -158,17 +159,17 @@ fn cache_all_read_modes() {
 fn cache_overwrite_same_key() {
     let mut cache = SemanticCache::new(100);
     let path = PathBuf::from("test.rs");
-    let cache_key = "key";
+    let content = "fn main() {}";
     let now = SystemTime::now();
     
-    cache.insert(&path, "old_value".to_string(), cache_key.to_string(), 50, ReadMode::Full, now);
+    cache.insert(&path, content.to_string(), "old_result".to_string(), 50, ReadMode::Full, now);
     assert_eq!(cache.size(), 1);
     
-    cache.insert(&path, "new_value".to_string(), cache_key.to_string(), 50, ReadMode::Full, now);
+    cache.insert(&path, content.to_string(), "new_result".to_string(), 50, ReadMode::Full, now);
     assert_eq!(cache.size(), 1);
     
-    let result = cache.get(&path, cache_key, ReadMode::Full, now);
-    assert_eq!(result.unwrap(), "new_value");
+    let result = cache.get(&path, content, ReadMode::Full, now);
+    assert_eq!(result.unwrap(), "new_result");
 }
 
 #[test]
@@ -181,14 +182,14 @@ fn cache_zero_capacity() {
 fn cache_large_content() {
     let mut cache = SemanticCache::new(1);
     let path = PathBuf::from("large.rs");
-    let cache_key = "key";
-    let large_value = "x".repeat(10000);
+    let content = "x".repeat(10000);
+    let result = "cached_result";
     let now = SystemTime::now();
     
-    cache.insert(&path, large_value.clone(), cache_key.to_string(), 5000, ReadMode::Full, now);
+    cache.insert(&path, content.clone(), result.to_string(), 5000, ReadMode::Full, now);
     
-    let result = cache.get(&path, cache_key, ReadMode::Full, now);
-    assert_eq!(result.unwrap().len(), 10000);
+    let get_result = cache.get(&path, &content, ReadMode::Full, now);
+    assert_eq!(get_result.unwrap(), result);
 }
 
 #[test]
@@ -198,15 +199,15 @@ fn cache_many_entries_within_capacity() {
     
     for i in 0..50 {
         let path = PathBuf::from(format!("file{}.rs", i));
-        let key = format!("key{}", i);
-        let value = format!("value{}", i);
-        cache.insert(&path, value, key.clone(), 10, ReadMode::Full, now);
+        let content = format!("content{}", i);
+        let result = format!("result{}", i);
+        cache.insert(&path, content.clone(), result, 10, ReadMode::Full, now);
     }
     
     assert_eq!(cache.size(), 50);
     
-    let result = cache.get(&PathBuf::from("file0.rs"), "key0", ReadMode::Full, now);
-    assert!(result.is_some());
+    let get_result = cache.get(&PathBuf::from("file0.rs"), "content0", ReadMode::Full, now);
+    assert!(get_result.is_some());
 }
 
 // ============================================================================
@@ -429,13 +430,13 @@ fn integration_cache_with_policy_selected_mode() {
     let mut cache = SemanticCache::new(100);
     
     let path = PathBuf::from("code.rs");
-    let key = "processing_result";
-    let value = "fn main()";
+    let content = "fn main()";
+    let result = "processing_result";
     let now = SystemTime::now();
     
-    cache.insert(&path, value.to_string(), key.to_string(), 100, ReadMode::Full, now);
+    cache.insert(&path, content.to_string(), result.to_string(), 100, ReadMode::Full, now);
     
-    let retrieved = cache.get(&path, key, ReadMode::Full, now);
+    let retrieved = cache.get(&path, content, ReadMode::Full, now);
     assert!(retrieved.is_some());
 }
 
@@ -447,11 +448,11 @@ fn integration_cache_and_budget_together() {
     
     for i in 0..10 {
         let path = PathBuf::from(format!("file{}.rs", i));
-        let key = format!("key{}", i);
-        let value = format!("result{}", i);
+        let content = format!("content{}", i);
+        let result = format!("result{}", i);
         let tokens = 100;
         
-        cache.insert(&path, value, key, tokens, ReadMode::Full, now);
+        cache.insert(&path, content, result, tokens, ReadMode::Full, now);
         budget.consume(tokens);
     }
     
@@ -475,13 +476,13 @@ fn integration_all_three_systems() {
     
     for (filename, tokens) in &files {
         let path = PathBuf::from(filename);
-        let key = format!("key_{}", filename);
-        let value = format!("result_{}", filename);
+        let content = format!("content_{}", filename);
+        let result = format!("result_{}", filename);
         
         budget.consume(*tokens);
         
         if budget.percentage_used() < 0.9 {
-            cache.insert(&path, value, key, *tokens, ReadMode::Full, now);
+            cache.insert(&path, content, result, *tokens, ReadMode::Full, now);
         }
     }
     
@@ -501,7 +502,7 @@ fn integration_budget_tracking_during_cache_ops() {
     let status = budget.consume(50);
     assert_eq!(status, ctx_lite::core::budget::BudgetStatus::Ok);
     
-    cache.insert(&PathBuf::from("file.rs"), "value".to_string(), "key".to_string(), 50, ReadMode::Full, now);
+    cache.insert(&PathBuf::from("file.rs"), "content".to_string(), "result".to_string(), 50, ReadMode::Full, now);
     assert!(budget.percentage_used() > 0.75);
 }
 
@@ -512,13 +513,13 @@ fn integration_cache_with_multiple_modes_same_file() {
     let now = SystemTime::now();
     
     let path = PathBuf::from("source.py");
+    let content = "shared_content";
     let modes = vec![ReadMode::Full, ReadMode::Signatures, ReadMode::Diff];
     
     for (i, mode) in modes.iter().enumerate() {
-        let key = format!("key_{}", i);
-        let value = format!("value_{}", i);
+        let result = format!("result_{}", i);
         let tokens = 50;
-        cache.insert(&path, value, key, tokens, *mode, now);
+        cache.insert(&path, content.to_string(), result, tokens, *mode, now);
         budget.consume(tokens);
     }
     
@@ -539,16 +540,16 @@ fn integration_cache_eviction_with_multiple_files() {
     
     for (i, (filename, size)) in files.iter().enumerate() {
         let path = PathBuf::from(filename);
-        let key = format!("key_{}", i);
-        let value = format!("value_{}", i);
+        let content = format!("content_{}", i);
+        let result = format!("result_{}", i);
         
-        cache.insert(&path, value, key.clone(), *size, ReadMode::Full, now + Duration::from_secs(i as u64));
+        cache.insert(&path, content, result, *size, ReadMode::Full, now + Duration::from_secs(i as u64));
     }
     
     assert_eq!(cache.size(), 3);
     
     let path = PathBuf::from("readme.md");
-    cache.insert(&path, "value".to_string(), "new_key".to_string(), 100, ReadMode::Full, now + Duration::from_secs(10));
+    cache.insert(&path, "new_content".to_string(), "new_result".to_string(), 100, ReadMode::Full, now + Duration::from_secs(10));
     
     assert_eq!(cache.size(), 3);
 }
@@ -562,14 +563,14 @@ fn integration_budget_prevents_excessive_caching() {
     let mut inserted = 0;
     for i in 0..50 {
         let path = PathBuf::from(format!("file{}.txt", i));
-        let key = format!("key{}", i);
-        let value = format!("value{}", i);
+        let content = format!("content{}", i);
+        let result = format!("result{}", i);
         let tokens = 20;
         
         let new_total = budget.used() + tokens;
         if new_total <= 500 {
             budget.consume(tokens);
-            cache.insert(&path, value, key, tokens, ReadMode::Full, now);
+            cache.insert(&path, content, result, tokens, ReadMode::Full, now);
             inserted += 1;
         }
     }
@@ -594,14 +595,14 @@ fn integration_cache_policy_budget_scaling() {
         };
         
         let path = PathBuf::from(format!("file{}.{}", i, ext));
-        let key = format!("key_{}", i);
-        let value = format!("value_{}", i);
+        let content = format!("content_{}", i);
+        let result = format!("result_{}", i);
         let file_size = (i * 50) % 100000;
         let tokens = (file_size / 100).max(10);
         
         if budget.used() + tokens <= 50000 {
             budget.consume(tokens);
-            cache.insert(&path, value, key, tokens, ReadMode::Full, now);
+            cache.insert(&path, content, result, tokens, ReadMode::Full, now);
         }
     }
     
@@ -627,16 +628,16 @@ fn integration_cache_with_mtime_and_modes() {
     let mut cache = SemanticCache::new(100);
     
     let path = PathBuf::from("main.rs");
-    let key = "key_1";
-    let value = "result";
+    let content = "fn main() {}";
+    let result = "processed_main";
     let now = SystemTime::now();
     
-    cache.insert(&path, value.to_string(), key.to_string(), 100, ReadMode::Full, now);
+    cache.insert(&path, content.to_string(), result.to_string(), 100, ReadMode::Full, now);
     
-    assert!(cache.get(&path, key, ReadMode::Full, now).is_some());
+    assert!(cache.get(&path, content, ReadMode::Full, now).is_some());
     
     let later = now + Duration::from_secs(60);
-    assert!(cache.get(&path, key, ReadMode::Full, later).is_none());
+    assert!(cache.get(&path, content, ReadMode::Full, later).is_none());
 }
 
 #[test]
@@ -647,9 +648,10 @@ fn integration_budget_and_policy_coordination() {
     
     for i in 0..8 {
         let path = PathBuf::from(format!("file{}.txt", i));
-        let key = format!("key_{}", i);
+        let content = format!("content{}", i);
+        let result = format!("result");
         budget.consume(100);
-        cache.insert(&path, "value".to_string(), key, 100, ReadMode::Full, now);
+        cache.insert(&path, content, result, 100, ReadMode::Full, now);
     }
     
     assert_eq!(budget.used(), 800);
@@ -667,14 +669,14 @@ fn integration_stress_test_mixed_operations() {
     for round in 0..20 {
         for (i, mode) in modes.iter().enumerate() {
             let path = PathBuf::from(format!("f_r{}_m{}.txt", round, i));
-            let key = format!("k_r{}_m{}", round, i);
-            let value = format!("v_r{}_m{}", round, i);
+            let content = format!("c_r{}_m{}", round, i);
+            let result = format!("r_r{}_m{}", round, i);
             let size = (round * 100 + i * 50) % 100000;
             let tokens = (size / 100).max(10).min(500);
             
             if budget.used() + tokens <= 10000 {
                 budget.consume(tokens);
-                cache.insert(&path, value, key, tokens, *mode, now);
+                cache.insert(&path, content, result, tokens, *mode, now);
             }
         }
     }
@@ -691,13 +693,13 @@ fn integration_three_system_final_test() {
     
     for i in 0..10 {
         let path = PathBuf::from(format!("module{}.rs", i));
-        let key = format!("key_{}", i);
-        let value = format!("module{}", i);
+        let content = format!("content_module{}", i);
+        let result = format!("result_module{}", i);
         let tokens = 50 + i * 10;
         
         if budget.used() + tokens <= 3000 && cache.size() < 50 {
             budget.consume(tokens);
-            cache.insert(&path, value, key, tokens, ReadMode::Signatures, now);
+            cache.insert(&path, content, result, tokens, ReadMode::Signatures, now);
         }
     }
     
@@ -712,23 +714,23 @@ fn integration_cache_deterministic_lru_order() {
     let now = SystemTime::now();
     
     // Insert first entry and wait to capture distinct timestamps
-    cache.insert(&PathBuf::from("first.rs"), "v1".to_string(), "k1".to_string(), 50, ReadMode::Full, now);
+    cache.insert(&PathBuf::from("first.rs"), "c1".to_string(), "r1".to_string(), 50, ReadMode::Full, now);
     thread::sleep(Duration::from_millis(10));
     
     // Insert second entry
-    cache.insert(&PathBuf::from("second.py"), "v2".to_string(), "k2".to_string(), 50, ReadMode::Full, now);
+    cache.insert(&PathBuf::from("second.py"), "c2".to_string(), "r2".to_string(), 50, ReadMode::Full, now);
     thread::sleep(Duration::from_millis(10));
     
     // Insert third entry - should evict the oldest (first)
-    cache.insert(&PathBuf::from("third.ts"), "v3".to_string(), "k3".to_string(), 50, ReadMode::Full, now);
+    cache.insert(&PathBuf::from("third.ts"), "c3".to_string(), "r3".to_string(), 50, ReadMode::Full, now);
     
     // Verify cache size is at capacity
     assert_eq!(cache.size(), 2);
     
     // First entry should be evicted (oldest by insertion timestamp)
-    assert!(cache.get(&PathBuf::from("first.rs"), "k1", ReadMode::Full, now).is_none());
+    assert!(cache.get(&PathBuf::from("first.rs"), "c1", ReadMode::Full, now).is_none());
     
     // Second and third should remain
-    assert!(cache.get(&PathBuf::from("second.py"), "k2", ReadMode::Full, now).is_some());
-    assert!(cache.get(&PathBuf::from("third.ts"), "k3", ReadMode::Full, now).is_some());
+    assert!(cache.get(&PathBuf::from("second.py"), "c2", ReadMode::Full, now).is_some());
+    assert!(cache.get(&PathBuf::from("third.ts"), "c3", ReadMode::Full, now).is_some());
 }

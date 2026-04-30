@@ -29,7 +29,7 @@ impl ContextBudget {
         let percent = self.percentage_used();
         if percent > 1.0 {
             BudgetStatus::Exceeded
-        } else if percent >= self.warning_threshold && percent < 1.0 {
+        } else if percent > self.warning_threshold && percent < 1.0 {
             BudgetStatus::WarningThreshold
         } else {
             BudgetStatus::Ok
@@ -91,9 +91,12 @@ mod tests {
         budget.consume(700); // 70%
         assert_eq!(budget.check_status(), BudgetStatus::Ok);
 
-        budget.consume(100); // 80%
-        assert_eq!(budget.check_status(), BudgetStatus::WarningThreshold);
+        budget.consume(100); // 80% - should be Ok with > not >=
+        assert_eq!(budget.check_status(), BudgetStatus::Ok);
 
+        budget.consume(1); // 80.1% - now should trigger WarningThreshold
+        assert_eq!(budget.check_status(), BudgetStatus::WarningThreshold);
+        
         budget.consume(50); // 85%
         assert_eq!(budget.check_status(), BudgetStatus::WarningThreshold);
     }
