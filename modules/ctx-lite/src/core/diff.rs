@@ -5,6 +5,7 @@
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use crate::core::minify::CompressedFormat;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LineDiff {
@@ -20,6 +21,7 @@ pub struct DiffResult {
     pub old_hash: u64,
     pub new_hash: u64,
     pub compression_percent: usize,
+    pub format_type: CompressedFormat,
 }
 
 impl DiffResult {
@@ -90,6 +92,7 @@ impl DiffMode {
                 old_hash: 0,
                 new_hash,
                 compression_percent: 0, // Full mode has no compression
+                format_type: CompressedFormat::Full,
             };
         }
 
@@ -100,6 +103,7 @@ impl DiffMode {
                 old_hash,
                 new_hash,
                 compression_percent: 99,
+                format_type: CompressedFormat::Minified,
             };
         }
 
@@ -138,6 +142,7 @@ impl DiffMode {
                 old_hash,
                 new_hash,
                 compression_percent: 0, // Fallback to full
+                format_type: CompressedFormat::Full,
             };
         }
 
@@ -149,6 +154,7 @@ impl DiffMode {
             old_hash,
             new_hash,
             compression_percent,
+            format_type: CompressedFormat::Minified,
         }
     }
 
