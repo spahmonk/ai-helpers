@@ -361,6 +361,7 @@ ai-helpers/
 - resolve relative path
 - canonicalize
 - reject escape through symlink
+- reject multiply-linked regular files on Unix builds (hard-link provenance is otherwise ambiguous)
 - enforce allowed roots
 - return normalized safe path
 

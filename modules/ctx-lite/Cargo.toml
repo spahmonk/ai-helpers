@@ -1,0 +1,16 @@
+[package]
+name = "ctx-lite"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "ctx_lite"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ctx-lite"
+path = "src/main.rs"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
