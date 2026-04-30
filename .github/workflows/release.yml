@@ -92,32 +92,25 @@ jobs:
           if-no-files-found: error
 
   create-release:
-    name: Create GitHub Release
+    name: Create GitHub Release and Publish to npm
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: binaries
           path: artifacts
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: artifacts/*
-          draft: false
-          prerelease: false
+      - name: Upload release assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  publish-npm:
-    name: Publish to npm
-    runs-on: ubuntu-latest
-    needs: create-release
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+        run: |
+          version="${{ github.ref }}" && version="${version#refs/tags/v}"
+          gh release upload v${version} artifacts/* --clobber
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
