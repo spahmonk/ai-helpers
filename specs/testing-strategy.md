@@ -79,6 +79,7 @@ Draft v1
 - доступ внутри root;
 - запрет вне root;
 - symlink escape;
+- hard-link regression for multiply-linked regular files where the platform exposes link counts;
 - allow_paths;
 - canonicalization correctness.
 
