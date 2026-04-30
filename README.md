@@ -25,7 +25,7 @@ npm install -g @spahmonk/ctx-lite
 
 ### Verify
 ```bash
-ctx-lite --version  # Should print: ctx-lite 1.0.0
+ctx-lite --version  # Should print: ctx-lite 0.1.0
 ```
 
 **👉 [Full installation guide →](QUICK_START.md)**
@@ -112,7 +112,7 @@ cargo fmt --all --check
 
 ## 📦 Release Information
 
-- **Version**: 1.0.1
+- **Version**: 0.1.0
 - **Status**: Production Ready
 - **Tests**: 258/258 passing ✓
 - **Platforms**: Linux, macOS, Windows
