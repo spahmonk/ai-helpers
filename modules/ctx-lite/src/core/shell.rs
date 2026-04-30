@@ -600,9 +600,13 @@ mod tests {
             &[String::from("git rev-parse --show-toplevel")],
         )
         .expect("git inspection command should normalize");
+        // Canonicalize paths to handle Windows path variations
+        let workspace = workspace_root()
+            .canonicalize()
+            .unwrap_or_else(|_| workspace_root());
         let config = AppConfig {
-            project_root: workspace_root(),
-            allowed_roots: vec![workspace_root()],
+            project_root: workspace.clone(),
+            allowed_roots: vec![workspace.clone()],
             ..AppConfig::default()
         };
 
@@ -610,12 +614,18 @@ mod tests {
             1024,
             PathJail::from_config(&config).expect("workspace path jail should initialize"),
         )
-        .execute(&command, &workspace_root())
+        .execute(&command, &workspace)
         .expect("executor should run allowed git inspection command");
 
         assert_eq!(output.exit_code, Some(0));
         assert_eq!(output.stderr, "");
-        assert_eq!(output.stdout.trim(), workspace_root().display().to_string());
+        // Normalize both sides for comparison (handle symlinks and case differences)
+        let actual = PathBuf::from(output.stdout.trim())
+            .canonicalize()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| output.stdout.trim().to_string());
+        let expected = workspace.display().to_string();
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -623,9 +633,13 @@ mod tests {
         let command =
             normalize_and_validate_command("git ls-files", &[String::from("git ls-files")])
                 .expect("git ls-files should normalize");
+        // Canonicalize paths to handle Windows path variations
+        let workspace = workspace_root()
+            .canonicalize()
+            .unwrap_or_else(|_| workspace_root());
         let config = AppConfig {
-            project_root: workspace_root(),
-            allowed_roots: vec![workspace_root()],
+            project_root: workspace.clone(),
+            allowed_roots: vec![workspace.clone()],
             ..AppConfig::default()
         };
 
@@ -633,7 +647,7 @@ mod tests {
             32,
             PathJail::from_config(&config).expect("workspace path jail should initialize"),
         )
-        .execute(&command, &workspace_root())
+        .execute(&command, &workspace)
         .expect("executor should capture output within a fixed budget");
 
         assert_eq!(output.exit_code, Some(0));
@@ -649,11 +663,17 @@ mod tests {
     fn safe_environment_only_keeps_whitelisted_variables() {
         let environment = build_safe_environment();
 
+        // Also allow PATHEXT on Windows (file extension list for command lookup)
+        let allowed_vars = if cfg!(windows) {
+            vec!["PATH", "LANG", "LC_ALL", "NO_COLOR", "PATHEXT"]
+        } else {
+            vec!["PATH", "LANG", "LC_ALL", "NO_COLOR"]
+        };
+
         assert!(
-            environment.iter().all(|(key, _)| matches!(
-                key.to_str(),
-                Some("PATH" | "LANG" | "LC_ALL" | "NO_COLOR")
-            )),
+            environment
+                .iter()
+                .all(|(key, _)| allowed_vars.contains(&key.to_str().unwrap_or(""))),
             "unexpected environment: {:?}",
             environment
         );
