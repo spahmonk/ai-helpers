@@ -49,44 +49,46 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: repo/modules/ctx-lite
+          workspaces: repo
 
       - name: Build release binary
-        working-directory: repo/modules/ctx-lite
-        run: cargo build --release --bin ctx-lite
+        working-directory: repo
+        run: cargo build -p ctx-lite --release --bin ctx-lite
 
       - name: Strip binary (Unix)
         if: runner.os != 'Windows'
-        working-directory: repo/modules/ctx-lite
+        working-directory: repo
         run: strip target/release/ctx-lite || true
 
       - name: Create archive (Unix)
         if: runner.os != 'Windows'
-        working-directory: repo/modules/ctx-lite
+        working-directory: repo
         run: |
           version="${{ github.ref }}" && version="${version#refs/tags/v}"
           tar czf ctx-lite-${version}-${{ matrix.target }}.tar.gz -C target/release ctx-lite
           ls -lh ctx-lite-${version}-${{ matrix.target }}.tar.gz
+          cp ctx-lite-${version}-${{ matrix.target }}.tar.gz $GITHUB_WORKSPACE/
 
       - name: Create archive (Windows)
         if: runner.os == 'Windows'
-        working-directory: repo/modules/ctx-lite
+        working-directory: repo
         shell: powershell
         run: |
           $version = "${{ github.ref }}".substring("refs/tags/v".length)
           $archive = "ctx-lite-${version}-${{ matrix.target }}.zip"
           7z a $archive target/release/ctx-lite.exe
           Get-Item $archive | Format-List Length
+          Copy-Item $archive -Destination $env:GITHUB_WORKSPACE/
 
       - name: Test binary
-        working-directory: repo/modules/ctx-lite
+        working-directory: repo
         run: ./target/release/${{ matrix.artifact_name }} --help
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: binaries
-          path: repo/modules/ctx-lite/ctx-lite-*
+          path: ctx-lite-*
           if-no-files-found: error
 
   create-release:
