@@ -64,9 +64,8 @@ ctx-lite doctor
 ## 📚 Documentation
 
 - **[Quick Start](QUICK_START.md)** - Get started in 3 minutes
-- **[Installation Guide](docs/INSTALL.md)** - Detailed setup for all platforms
-- **[Deployment Guide](DEPLOYMENT.md)** - Production deployment & MCP integration
-- **[Architecture](docs/implementation-orchestration.md)** - Design & internals
+- **[MCP Integration](MCP_INTEGRATION.md)** - Use as Model Context Protocol server
+- **[Module Details](modules/ctx-lite/README.md)** - ctx-lite specifics
 
 ---
 
@@ -100,8 +99,6 @@ cargo fmt --all --check
 | Processing Time | <1s per session |
 | Cache Hit Rate | 94%+ |
 
-**See [DEPLOYMENT.md](DEPLOYMENT.md) for full performance details.**
-
 ---
 
 ## 🔐 Security
@@ -115,9 +112,9 @@ cargo fmt --all --check
 
 ## 📦 Release Information
 
-- **Version**: 1.0.0
+- **Version**: 1.0.1
 - **Status**: Production Ready
-- **Tests**: 237/237 passing ✓
+- **Tests**: 258/258 passing ✓
 - **Platforms**: Linux, macOS, Windows
 - **License**: MIT (see LICENSE)
 
