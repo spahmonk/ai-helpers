@@ -663,9 +663,17 @@ mod tests {
     fn safe_environment_only_keeps_whitelisted_variables() {
         let environment = build_safe_environment();
 
-        // Also allow PATHEXT on Windows (file extension list for command lookup)
+        // Also allow Windows-specific environment variables
         let allowed_vars = if cfg!(windows) {
-            vec!["PATH", "LANG", "LC_ALL", "NO_COLOR", "PATHEXT"]
+            vec![
+                "PATH",
+                "LANG",
+                "LC_ALL",
+                "NO_COLOR",
+                "PATHEXT",
+                "SYSTEMROOT",
+                "WINDIR",
+            ]
         } else {
             vec!["PATH", "LANG", "LC_ALL", "NO_COLOR"]
         };
