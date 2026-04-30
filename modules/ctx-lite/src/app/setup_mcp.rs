@@ -49,13 +49,11 @@ impl McpClient {
     }
 
     fn copilot_config_path() -> Result<PathBuf, String> {
-        let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE"))
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
             .map_err(|_| "HOME or USERPROFILE not set".to_string())?;
-        
-        Ok(PathBuf::from(format!(
-            "{}/.copilot/lsp-config.json",
-            home
-        )))
+
+        Ok(PathBuf::from(format!("{}/.copilot/lsp-config.json", home)))
     }
 }
 
@@ -109,14 +107,14 @@ impl McpSetup {
         // Write config
         let json_str = serde_json::to_string_pretty(&config)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
-        
-        fs::write(&config_path, json_str)
-            .map_err(|e| format!("Failed to write config: {}", e))?;
+
+        fs::write(&config_path, json_str).map_err(|e| format!("Failed to write config: {}", e))?;
 
         Ok(SetupResult {
             client: McpClient::ClaudeDesktop,
             config_path,
-            message: "Claude Desktop configured successfully! Restart Claude Desktop to activate.".to_string(),
+            message: "Claude Desktop configured successfully! Restart Claude Desktop to activate."
+                .to_string(),
         })
     }
 
@@ -176,9 +174,8 @@ impl McpSetup {
         // Write config
         let json_str = serde_json::to_string_pretty(&config)
             .map_err(|e| format!("Failed to serialize config: {}", e))?;
-        
-        fs::write(&config_path, json_str)
-            .map_err(|e| format!("Failed to write config: {}", e))?;
+
+        fs::write(&config_path, json_str).map_err(|e| format!("Failed to write config: {}", e))?;
 
         Ok(SetupResult {
             client: McpClient::CopilotCli,
@@ -189,11 +186,10 @@ impl McpSetup {
 
     /// Read JSON file
     fn read_json_file(path: &Path) -> Result<serde_json::Value, String> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read config: {}", e))?;
-        
-        serde_json::from_str(&content)
-            .map_err(|e| format!("Invalid JSON in config: {}", e))
+        let content =
+            fs::read_to_string(path).map_err(|e| format!("Failed to read config: {}", e))?;
+
+        serde_json::from_str(&content).map_err(|e| format!("Invalid JSON in config: {}", e))
     }
 
     /// Ensure parent directory exists
@@ -217,8 +213,7 @@ impl McpSetup {
                 .as_secs()
         ));
 
-        fs::copy(path, &backup_path)
-            .map_err(|e| format!("Failed to create backup: {}", e))?;
+        fs::copy(path, &backup_path).map_err(|e| format!("Failed to create backup: {}", e))?;
 
         Ok(backup_path)
     }

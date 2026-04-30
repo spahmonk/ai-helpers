@@ -81,7 +81,7 @@ where
             "--mcp" => {
                 // MCP server mode - read JSON-RPC from stdin
                 self.handle_mcp_mode()
-            },
+            }
             _ => CliResult {
                 output: format!("Error: unknown command '{}'\n\n{}", args[0], help_text()),
                 exit_code: 1,
