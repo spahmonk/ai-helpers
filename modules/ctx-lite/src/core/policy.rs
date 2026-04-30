@@ -1,10 +1,12 @@
 use std::path::Path;
 use crate::core::cache::ReadMode;
+use crate::core::learner::ModeLearner;
 
 /// Adaptive policy for selecting the best compression mode per file type.
 ///
 /// The policy considers:
 /// - User preference (always wins if specified)
+/// - Learned patterns (if enough data from ModeLearner)
 /// - File extension (code/config/other)
 /// - File size (large files benefit from diff mode)
 /// - Budget constraints (suggests upgrading to more aggressive compression when needed)
@@ -86,6 +88,44 @@ impl AdaptivePolicy {
             p if p < 0.4 => Some(ReadMode::Map),
             _ => None,
         }
+    }
+
+    /// Select mode with ML-based learning integration.
+    ///
+    /// This method combines the static heuristics with learned patterns from ModeLearner.
+    /// First checks if ModeLearner has recommendations, then falls back to static heuristics.
+    ///
+    /// # Arguments
+    /// * `path` - The file path to analyze
+    /// * `file_size` - The size of the file in bytes
+    /// * `user_preference` - Optional user-specified mode override
+    /// * `learner` - Reference to the ModeLearner for getting learned recommendations
+    ///
+    /// # Returns
+    /// The recommended ReadMode
+    pub fn select_mode_with_learning(
+        path: &Path,
+        file_size: usize,
+        user_preference: Option<ReadMode>,
+        learner: &ModeLearner,
+    ) -> ReadMode {
+        // User preference always takes priority
+        if let Some(mode) = user_preference {
+            return mode;
+        }
+
+        let filename = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+
+        // Check if learner has a recommendation (at least 3 samples)
+        if let Some(learned_mode) = learner.get_recommended_mode(filename) {
+            return learned_mode;
+        }
+
+        // Fall back to static heuristics
+        Self::select_mode(path, file_size, None)
     }
 }
 
@@ -287,5 +327,63 @@ mod tests {
 
         assert_eq!(bash_mode.as_str(), "signatures");
         assert_eq!(sh_mode.as_str(), "signatures");
+    }
+
+    #[test]
+    fn test_select_mode_with_learning_no_learning_data() {
+        let learner = ModeLearner::new(60);
+        let path = PathBuf::from("main.rs");
+
+        let mode = AdaptivePolicy::select_mode_with_learning(&path, 1000, None, &learner);
+
+        // Should fall back to static heuristics
+        assert_eq!(mode.as_str(), "signatures");
+    }
+
+    #[test]
+    fn test_select_mode_with_learning_uses_learned_mode() {
+        let mut learner = ModeLearner::new(60);
+
+        // Learn that large files should use Diff
+        learner.learn_mode("large_file_1.bin", ReadMode::Diff, 92);
+        learner.learn_mode("large_file_2.bin", ReadMode::Diff, 90);
+        learner.learn_mode("large_file_3.bin", ReadMode::Diff, 91);
+
+        let path = PathBuf::from("other_large_file.bin");
+
+        // Should use learned Diff mode instead of Full mode
+        let mode = AdaptivePolicy::select_mode_with_learning(&path, 50_000, None, &learner);
+        assert_eq!(mode.as_str(), "diff");
+    }
+
+    #[test]
+    fn test_select_mode_with_learning_user_preference_priority() {
+        let mut learner = ModeLearner::new(60);
+
+        // Learn that .rs files should use Signatures
+        learner.learn_mode("main.rs", ReadMode::Signatures, 80);
+        learner.learn_mode("app.rs", ReadMode::Signatures, 75);
+        learner.learn_mode("lib.rs", ReadMode::Signatures, 78);
+
+        let path = PathBuf::from("test.rs");
+
+        // Even with learning, user preference should win
+        let mode = AdaptivePolicy::select_mode_with_learning(&path, 1000, Some(ReadMode::Full), &learner);
+        assert_eq!(mode.as_str(), "full");
+    }
+
+    #[test]
+    fn test_select_mode_with_learning_insufficient_samples() {
+        let mut learner = ModeLearner::new(60);
+
+        // Only 2 samples - not enough for recommendation
+        learner.learn_mode("main.rs", ReadMode::Signatures, 80);
+        learner.learn_mode("app.rs", ReadMode::Signatures, 75);
+
+        let path = PathBuf::from("test.rs");
+
+        // Should fall back to static heuristics (not enough learning data)
+        let mode = AdaptivePolicy::select_mode_with_learning(&path, 1000, None, &learner);
+        assert_eq!(mode.as_str(), "signatures");
     }
 }
