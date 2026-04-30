@@ -55,7 +55,7 @@ jobs:
 
       - name: Build release binary
         working-directory: repo/modules/ctx-lite
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --bin ctx-lite --target ${{ matrix.target }}
 
       - name: Strip binary (Unix)
         if: runner.os != 'Windows'
