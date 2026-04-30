@@ -332,11 +332,6 @@ impl FixtureRepo {
             .join("runtime")
             .join(format!("{}-{}-{}", name, std::process::id(), fixture_id));
 
-        // Canonicalize root to handle Windows path variations
-        if let Ok(canonical_root) = root.canonicalize() {
-            root = canonical_root;
-        }
-
         let repo_root = root.join("repo");
         let outside_root = root.join("outside");
 
@@ -350,6 +345,11 @@ impl FixtureRepo {
         fs::create_dir_all(repo_root.join(".hidden"))
             .expect("fixture hidden dir should be created");
         fs::create_dir_all(&outside_root).expect("fixture outside dir should be created");
+
+        // Canonicalize root after creating it to handle Windows path variations
+        if let Ok(canonical_root) = root.canonicalize() {
+            root = canonical_root;
+        }
 
         fs::write(
             repo_root.join("README.md"),
@@ -372,6 +372,10 @@ impl FixtureRepo {
             outside_root.join("outside.txt"),
             repo_root.join("links/outside.txt"),
         );
+
+        // Update paths after canonicalization
+        let repo_root = root.join("repo");
+        let outside_root = root.join("outside");
 
         Self {
             root,
