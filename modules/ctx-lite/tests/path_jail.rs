@@ -327,10 +327,16 @@ struct FixtureRepo {
 impl FixtureRepo {
     fn new(name: &str) -> Self {
         let fixture_id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        let mut root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests")
             .join("runtime")
             .join(format!("{}-{}-{}", name, std::process::id(), fixture_id));
+        
+        // Canonicalize root to handle Windows path variations
+        if let Ok(canonical_root) = root.canonicalize() {
+            root = canonical_root;
+        }
+        
         let repo_root = root.join("repo");
         let outside_root = root.join("outside");
 
@@ -376,14 +382,9 @@ impl FixtureRepo {
     }
 
     fn config(&self) -> AppConfig {
-        // Canonicalize paths to handle Windows path variations
-        let project_root = self
-            .repo_root
-            .canonicalize()
-            .unwrap_or_else(|_| self.repo_root.clone());
         AppConfig {
-            project_root: project_root.clone(),
-            allowed_roots: vec![project_root],
+            project_root: self.repo_root.clone(),
+            allowed_roots: vec![self.repo_root.clone()],
             ..AppConfig::default()
         }
     }
