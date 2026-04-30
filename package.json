@@ -1,0 +1,39 @@
+{
+  "name": "@spahmonk/ctx-lite",
+  "version": "1.0.0",
+  "description": "Fast context extractor for AI coding. No install needed: npx @spahmonk/ctx-lite",
+  "main": "bin/index.js",
+  "bin": {
+    "ctx-lite": "bin/index.js"
+  },
+  "scripts": {
+    "postinstall": "node bin/download-binary.js || true",
+    "test": "cd modules/ctx-lite && cargo test --release",
+    "build": "cd modules/ctx-lite && cargo build --release"
+  },
+  "keywords": [
+    "context",
+    "compression",
+    "ai",
+    "coding",
+    "mcp",
+    "model-context-protocol",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/spahmonk/ai-helpers.git",
+    "directory": "."
+  },
+  "homepage": "https://github.com/spahmonk/ai-helpers#readme",
+  "bugs": {
+    "url": "https://github.com/spahmonk/ai-helpers/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "author": "Copilot",
+  "preferGlobal": true,
+  "type": "module"
+}

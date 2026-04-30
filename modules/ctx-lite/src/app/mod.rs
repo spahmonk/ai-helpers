@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod contracts;
 pub mod mcp;
+pub mod setup_mcp;
 
 use self::contracts::{DoctorService, ReadService, SearchService, ShellService, TreeService};
 use crate::core::config::AppConfig;

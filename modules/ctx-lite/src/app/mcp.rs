@@ -91,7 +91,8 @@ where
                 "serverInfo": {
                     "name": "ctx-lite-mcp",
                     "version": "0.1.0"
-                }
+                },
+                "instructions": "# ctx-lite: Fast Context Extraction for AI Coding\n\n## Overview\nctx-lite is a high-performance context extractor and compression tool optimized for AI coding assistants. Use these tools to efficiently gather and analyze code context.\n\n## Best Practices\n\n### 1. **search** - Find code quickly\n- Use FIRST to locate relevant files and code patterns\n- Search for: function names, error messages, patterns, variable names\n- Efficient: searches in parallel, returns line numbers\n- Example: `search \"function handleRequest\"` before reading files\n\n### 2. **read** - Extract file contents\n- Use AFTER search to get file contents\n- Respects security boundaries (can't read outside allowed paths)\n- Automatically truncates large files\n- For large codebases: read multiple small files vs one huge file\n\n### 3. **tree** - Understand structure\n- Use to explore codebase organization\n- Shows directory structure with depth control\n- Fast way to find related files\n- Use max_depth=2-3 for large codebases\n\n### 4. **shell** - Execute commands\n- Use for git operations: `git log`, `git diff`, `git blame`\n- Use for build/test: `npm test`, `cargo test`\n- Whitelist-protected for security\n- Returns stdout, stderr, exit code\n\n### 5. **doctor** - Diagnose environment\n- Use to verify setup is correct\n- Checks: security policies, shell access, storage\n- Run when troubleshooting issues\n\n## Workflow Examples\n\n### Finding and fixing a bug:\n1. `search \"error message\"` - find the error\n2. `read \"path/to/file.rs\"` - examine the error location\n3. `search \"function name\"` - find related code\n4. `tree \".\"` - understand context\n5. `shell \". \" \"git diff\"` - see what changed\n\n### Understanding a feature:\n1. `search \"feature_name\"` - locate the feature\n2. `tree \"path/to/feature\"` - see structure\n3. `read` multiple related files\n4. `shell \". \" \"git log --oneline path/to/feature\"` - see history\n\n### Code review:\n1. `search \"modified pattern\"` - find changes\n2. `read` relevant files with context\n3. `shell \". \" \"git diff HEAD~1\"` - compare versions\n4. Analyze security, performance, correctness\n\n## Performance Tips\n\n- **search first**: Always search before reading to know what you need\n- **tree for structure**: Use tree to understand layout before diving in\n- **batch reads**: Read related files together to build context\n- **git for history**: Use shell + git to understand changes\n- **max_depth**: Limit tree depth for large codebases (2-3 levels)\n\n## Limitations\n\n- **Security**: Respects path jail - cannot read outside allowed directories\n- **Size**: Large files are automatically truncated (user-configurable)\n- **Whitelist**: Shell commands must be in whitelist (git, cargo, npm, python, etc.)\n- **Frequency**: Queries are fast but batching reduces overhead\n\n## When to Use What\n\n| Task | Tool | Why |\n|------|------|-----|\n| Find code | search | Fast parallel search |\n| Read file | read | Get exact content |\n| Explore dir | tree | Understand structure |\n| Git history | shell | Use `git log`, `git diff` |\n| Run tests | shell | Use `npm test`, `cargo test` |\n| Verify setup | doctor | Check configuration |\n\n## Pro Tips\n\n1. **Start with search**: Always begin with search to find relevant code\n2. **Use tree for orientation**: Before reading files, tree shows you what exists\n3. **Chain commands**: Use git shell commands to understand changes\n4. **Read strategically**: Read main files first, then implementations\n5. **Batch context**: Gather related context together for efficiency\n"
             }
         }))
     }
@@ -103,17 +104,17 @@ where
                 "tools": [
                     {
                         "name": "read",
-                        "description": "Read file contents",
+                        "description": "Read file contents - Use AFTER search to get exact file content. Fast and efficient for extracting code context. Respects security boundaries.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
                                 "path": {
                                     "type": "string",
-                                    "description": "Path to file"
+                                    "description": "File path to read (relative or absolute)"
                                 },
                                 "max_bytes": {
                                     "type": "integer",
-                                    "description": "Maximum bytes to read (optional)"
+                                    "description": "Maximum bytes to read - optional, useful for limiting output from large files"
                                 }
                             },
                             "required": ["path"]
@@ -121,21 +122,21 @@ where
                     },
                     {
                         "name": "tree",
-                        "description": "List directory tree",
+                        "description": "List directory structure - Use to explore codebase organization. Shows depth and file types. Use max_depth=2-3 for large codebases.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
                                 "path": {
                                     "type": "string",
-                                    "description": "Path to directory"
+                                    "description": "Directory path to explore (current dir if omitted)"
                                 },
                                 "max_depth": {
                                     "type": "integer",
-                                    "description": "Maximum depth (optional)"
+                                    "description": "Maximum depth to show (2-3 recommended for large codebases)"
                                 },
                                 "include_hidden": {
                                     "type": "boolean",
-                                    "description": "Include hidden files (optional)"
+                                    "description": "Include hidden files (.git, .env, etc)"
                                 }
                             },
                             "required": ["path"]
@@ -143,17 +144,17 @@ where
                     },
                     {
                         "name": "search",
-                        "description": "Search files",
+                        "description": "Search files by pattern or text - Use FIRST to locate relevant code. Fast parallel search. Returns line numbers and context. Use before read.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
                                 "query": {
                                     "type": "string",
-                                    "description": "Search query"
+                                    "description": "Search pattern - supports regex. Search for: function names, error messages, patterns, variables"
                                 },
                                 "limit": {
                                     "type": "integer",
-                                    "description": "Result limit (optional)"
+                                    "description": "Max results to return (default: 50)"
                                 }
                             },
                             "required": ["query"]
@@ -161,17 +162,17 @@ where
                     },
                     {
                         "name": "shell",
-                        "description": "Execute shell command",
+                        "description": "Execute shell commands - Use for git operations (git log, git diff, git blame) and build commands (npm test, cargo test). Whitelist-protected.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
                                 "command": {
                                     "type": "string",
-                                    "description": "Command to execute"
+                                    "description": "Command to execute - supports: git, npm, cargo, python, ruby, etc"
                                 },
                                 "cwd": {
                                     "type": "string",
-                                    "description": "Working directory (optional)"
+                                    "description": "Working directory for command (optional)"
                                 }
                             },
                             "required": ["command"]
@@ -179,17 +180,17 @@ where
                     },
                     {
                         "name": "doctor",
-                        "description": "Run diagnostic checks",
+                        "description": "Run diagnostic checks - Verifies ctx-lite setup, security policies, shell access, storage. Use to troubleshoot issues.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
                                 "include_storage": {
                                     "type": "boolean",
-                                    "description": "Include storage checks (optional)"
+                                    "description": "Include storage/cache diagnostics"
                                 },
                                 "include_shell_policy": {
                                     "type": "boolean",
-                                    "description": "Include shell policy checks (optional)"
+                                    "description": "Include shell security policy checks"
                                 }
                             }
                         }

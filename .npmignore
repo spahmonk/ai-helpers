@@ -1,0 +1,43 @@
+# npm package files to ignore
+
+# Development & Build
+.git
+.gitignore
+.github/
+.vscode/
+.idea/
+target/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation & Examples
+docs/
+DEPLOYMENT.md
+CHANGELOG.md
+RELEASE_NOTES.md
+
+# Tests
+tests/
+modules/
+specs/
+
+# Scripts
+scripts/
+deploy.sh
+
+# Workspace
+.worktrees/
+.copilot/
+
+# Node
+node_modules/
+npm-debug.log
+.npmrc
+
+# Misc
+*.md
+!README.md
+Cargo.toml
+Cargo.lock

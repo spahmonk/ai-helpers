@@ -94,6 +94,11 @@ impl DoctorService for DoctorServiceAdapter {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
+    // Check for --mcp flag first (should be run in MCP server mode)
+    if !args.is_empty() && args[0] == "--mcp" {
+        handle_mcp_mode();
+    }
+
     let mut config = AppConfig::default();
     config.shell_enabled = true;
 
@@ -134,4 +139,54 @@ fn main() {
     let result = cli.run(args);
     print!("{}", result.output);
     std::process::exit(result.exit_code);
+}
+
+/// Handle MCP server mode: reads JSON-RPC requests from stdin
+fn handle_mcp_mode() -> ! {
+    use ctx_lite::app::mcp::McpAdapter;
+
+    let mut config = AppConfig::default();
+    config.shell_enabled = true;
+
+    let jail = PathJail::from_config(&config).unwrap_or_else(|e| {
+        eprintln!("Error: {}", e.message);
+        std::process::exit(1);
+    });
+
+    let read_adapter = ReadServiceAdapter {
+        file_reader: FileReader::new(jail.clone()),
+    };
+
+    let tree_adapter = TreeServiceAdapter {
+        tree_builder: TreeBuilder::new(jail.clone()),
+    };
+
+    let search_adapter = SearchServiceAdapter {
+        search_service: SearchServiceImpl::new(jail.clone()),
+    };
+
+    let shell_adapter = ShellServiceAdapter {
+        executor: ShellExecutor::new(config.max_shell_output_bytes, jail.clone()),
+    };
+
+    let doctor_adapter = DoctorServiceAdapter {
+        config: config.clone(),
+    };
+
+    let mut mcp = McpAdapter::new(
+        config,
+        read_adapter,
+        tree_adapter,
+        search_adapter,
+        shell_adapter,
+        doctor_adapter,
+    );
+
+    match mcp.run() {
+        Ok(_) => std::process::exit(0),
+        Err(e) => {
+            eprintln!("MCP Error: {}", e);
+            std::process::exit(1);
+        }
+    }
 }

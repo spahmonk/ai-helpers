@@ -69,6 +69,7 @@ where
             "search" => self.handle_search(&args[1..]),
             "shell" => self.handle_shell(&args[1..]),
             "doctor" => self.handle_doctor(&args[1..]),
+            "setup-mcp" => self.handle_setup_mcp(&args[1..]),
             "--help" | "-h" => CliResult {
                 output: help_text(),
                 exit_code: 0,
@@ -76,6 +77,10 @@ where
             "--version" | "-v" => CliResult {
                 output: format!("ctx-lite {}\n", crate::version()),
                 exit_code: 0,
+            },
+            "--mcp" => {
+                // MCP server mode - read JSON-RPC from stdin
+                self.handle_mcp_mode()
             },
             _ => CliResult {
                 output: format!("Error: unknown command '{}'\n\n{}", args[0], help_text()),
@@ -236,11 +241,43 @@ where
             },
         }
     }
+
+    fn handle_setup_mcp(&self, _args: &[String]) -> CliResult {
+        match crate::app::setup_mcp::McpSetup::run_interactive() {
+            Ok(results) => {
+                let mut output = String::new();
+                for result in results {
+                    output.push_str(&format!(
+                        "✓ {} configured at: {}\n",
+                        result.client.name(),
+                        result.config_path.display()
+                    ));
+                }
+                CliResult {
+                    output,
+                    exit_code: 0,
+                }
+            }
+            Err(err) => CliResult {
+                output: format!("Error: {}\n", err),
+                exit_code: 1,
+            },
+        }
+    }
+
+    fn handle_mcp_mode(&self) -> CliResult {
+        // This is handled in main.rs through McpAdapter
+        // CLI shouldn't reach here, but provide a helpful message
+        CliResult {
+            output: "Error: MCP mode should be handled by the MCP adapter\n".to_string(),
+            exit_code: 1,
+        }
+    }
 }
 
 fn help_text() -> String {
     format!(
-        "ctx-lite {}\n\nUsage: ctx-lite <COMMAND> [OPTIONS] [ARGS]\n\nCommands:\n  read <path>              Read file at path\n  tree [path]              List directory tree\n  search <query>           Search for text/regex\n  shell <cwd> <command>    Execute whitelisted command\n  doctor                   Run diagnostics\n  --help, -h               Show this help message\n  --version, -v            Show version\n",
+        "ctx-lite {}\n\nUsage: ctx-lite <COMMAND> [OPTIONS] [ARGS]\n\nCommands:\n  read <path>              Read file at path\n  tree [path]              List directory tree\n  search <query>           Search for text/regex\n  shell <cwd> <command>    Execute whitelisted command\n  doctor                   Run diagnostics\n  setup-mcp                Configure MCP for Claude Desktop, Copilot CLI\n  --mcp                    Run in MCP server mode (stdin/stdout)\n  --help, -h               Show this help message\n  --version, -v            Show version\n",
         crate::version()
     )
 }
