@@ -53,7 +53,8 @@ jobs:
         with:
           workspaces: repo/modules/ctx-lite
 
-      - name: Build release binary
+      - name: Build release binary (Unix)
+        if: runner.os != 'Windows'
         working-directory: repo/modules/ctx-lite
         run: |
           cargo clean
@@ -61,6 +62,16 @@ jobs:
           # Copy to target-specific directory for consistent paths
           mkdir -p target/${{ matrix.target }}/release
           cp target/release/ctx-lite target/${{ matrix.target }}/release/ctx-lite
+
+      - name: Build release binary (Windows)
+        if: runner.os == 'Windows'
+        working-directory: repo/modules/ctx-lite
+        run: |
+          cargo clean
+          cargo build --release --bin ctx-lite
+          # Copy to target-specific directory for consistent paths
+          if not exist "target\${{ matrix.target }}\release" mkdir "target\${{ matrix.target }}\release"
+          copy target\release\ctx-lite.exe "target\${{ matrix.target }}\release\ctx-lite.exe"
 
       - name: Strip binary (Unix)
         if: runner.os != 'Windows'
