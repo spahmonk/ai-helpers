@@ -65,12 +65,13 @@ cargo audit || true
 git status Cargo.lock
 ```
 
-### 4. Binary Functionality
+### 4. Binary Functionality & Smoke Tests
 
 - [ ] Binary builds successfully
 - [ ] Binary help output is complete: `--help`
 - [ ] Binary version flag works: `--version`
-- [ ] Smoke test on actual code repository works
+- [ ] Smoke tests pass
+- [ ] All CLI commands work correctly
 
 ```bash
 # Build release binary
@@ -82,9 +83,45 @@ cargo build --release
 # Test version
 ./target/release/ctx-lite --version
 
-# Smoke test (if applicable)
-./target/release/ctx-lite --help | grep -q "Usage" && echo "Help works"
+# Run comprehensive smoke tests
+cargo test --test smoke_tests --quiet
+
+# Use automated verification script
+./scripts/verify-release.sh
+
+# Or manually test key commands
+./target/release/ctx-lite read Cargo.toml
+./target/release/ctx-lite tree .
+./target/release/ctx-lite doctor
 ```
+
+### Smoke Tests
+
+The `tests/smoke_tests.rs` file contains 30+ end-to-end tests that verify:
+
+- **CLI Commands**: help, version, and argument parsing
+- **File Operations**: read, tree directory listing
+- **Search**: text pattern matching
+- **Shell Commands**: execution of whitelisted commands
+- **Diagnostics**: doctor command functionality
+- **Error Handling**: proper error messages for invalid input
+- **Performance**: baseline performance checks
+- **Cross-Platform**: path handling on different systems
+
+Run smoke tests with:
+
+```bash
+# Run all smoke tests
+cargo test --test smoke_tests
+
+# Run specific smoke test
+cargo test --test smoke_tests smoke_read_readme
+
+# Run with output
+cargo test --test smoke_tests -- --nocapture
+```
+
+Expected output: All 30+ tests should pass before release.
 
 ## Version Bump
 
