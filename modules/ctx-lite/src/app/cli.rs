@@ -92,45 +92,47 @@ where
             };
         }
 
-        // Parse --mode flag if present
-        let (path, mode) = if args.len() >= 3 && args[0] == "--mode" {
-            // Format: read --mode <mode> <path>
-            let mode_str = &args[1];
-            let path = args[2].clone();
-            let mode = match mode_str.as_str() {
-                "full" => Some(crate::app::contracts::ReadMode::Full),
-                "signatures" => Some(crate::app::contracts::ReadMode::Signatures),
-                "map" => Some(crate::app::contracts::ReadMode::Map),
-                "diff" => Some(crate::app::contracts::ReadMode::Diff),
-                _ => {
-                    return CliResult {
-                        output: format!("Error: invalid mode '{}'. Valid options: full, signatures, map, diff\n", mode_str),
-                        exit_code: 1,
-                    };
+        // Parse flags
+        let mut show_budget = true;
+        let mut mode = None;
+        let mut path = String::new();
+
+        // Look for --no-budget and --mode flags
+        for (i, arg) in args.iter().enumerate() {
+            match arg.as_str() {
+                "--no-budget" => show_budget = false,
+                "--mode" => {
+                    if i + 1 < args.len() {
+                        let mode_str = &args[i + 1];
+                        mode = match mode_str.as_str() {
+                            "full" => Some(crate::app::contracts::ReadMode::Full),
+                            "signatures" => Some(crate::app::contracts::ReadMode::Signatures),
+                            "map" => Some(crate::app::contracts::ReadMode::Map),
+                            "diff" => Some(crate::app::contracts::ReadMode::Diff),
+                            _ => {
+                                return CliResult {
+                                    output: format!("Error: invalid mode '{}'. Valid options: full, signatures, map, diff\n", mode_str),
+                                    exit_code: 1,
+                                };
+                            }
+                        };
+                    }
                 }
-            };
-            (path, mode)
-        } else if args.len() >= 2 && args[args.len() - 2] == "--mode" {
-            // Format: read <path> --mode <mode>
-            let path = args[0].clone();
-            let mode_str = &args[args.len() - 1];
-            let mode = match mode_str.as_str() {
-                "full" => Some(crate::app::contracts::ReadMode::Full),
-                "signatures" => Some(crate::app::contracts::ReadMode::Signatures),
-                "map" => Some(crate::app::contracts::ReadMode::Map),
-                "diff" => Some(crate::app::contracts::ReadMode::Diff),
                 _ => {
-                    return CliResult {
-                        output: format!("Error: invalid mode '{}'. Valid options: full, signatures, map, diff\n", mode_str),
-                        exit_code: 1,
-                    };
+                    // Treat non-flag arguments as path (first one encountered)
+                    if !arg.starts_with("--") && path.is_empty() {
+                        path = arg.clone();
+                    }
                 }
+            }
+        }
+
+        if path.is_empty() {
+            return CliResult {
+                output: "Error: read requires a path argument\n".to_string(),
+                exit_code: 1,
             };
-            (path, mode)
-        } else {
-            // No mode flag, use default
-            (args[0].clone(), None)
-        };
+        }
 
         let request = ReadRequest {
             path,
@@ -141,7 +143,7 @@ where
         match request.normalize(&self.config) {
             Ok(normalized) => match self.read.read(normalized) {
                 Ok(response) => CliResult {
-                    output: format_read_response(&response),
+                    output: format_read_response(&response, show_budget),
                     exit_code: 0,
                 },
                 Err(err) => CliResult {
@@ -281,25 +283,59 @@ where
 
 fn help_text() -> String {
     format!(
-        "ctx-lite {}\n\nUsage: ctx-lite <COMMAND> [OPTIONS] [ARGS]\n\nCommands:\n  read <path>              Read file at path\n  tree [path]              List directory tree\n  search <query>           Search for text/regex\n  shell <cwd> <command>    Execute whitelisted command\n  doctor                   Run diagnostics\n  --help, -h               Show this help message\n  --version, -v            Show version\n",
+        "ctx-lite {}\n\nUsage: ctx-lite <COMMAND> [OPTIONS] [ARGS]\n\nCommands:\n  read <path>              Read file at path\n  tree [path]              List directory tree\n  search <query>           Search for text/regex\n  shell <cwd> <command>    Execute whitelisted command\n  doctor                   Run diagnostics\n  --help, -h               Show this help message\n  --version, -v            Show version\n\nOptions for read command:\n  --mode <mode>            Compression mode: full, signatures, map, diff\n  --no-budget              Suppress budget information in output\n",
         crate::version()
     )
 }
 
-fn format_read_response(response: &crate::app::contracts::ReadResponse) -> String {
+fn format_read_response(response: &crate::app::contracts::ReadResponse, show_budget: bool) -> String {
+    use crate::core::budget::BudgetStatus;
+
     let mode_str = format!("{:?}", response.mode);
+    
+    let mode_indicator = if response.is_auto_selected {
+        format!("{} (auto-selected)", mode_str)
+    } else {
+        mode_str
+    };
+
     let compression_str = if response.compression_percent > 0 {
-        format!(" ({}% compression)", response.compression_percent)
+        format!(" [{}% compression]", response.compression_percent)
     } else {
         String::new()
     };
-    format!(
-        "File: {}\nMode: {}{}\n\n{}\n",
+
+    let mut output = format!(
+        "File: {}\nMode: {}{}\n",
         response.path.display(),
-        mode_str,
-        compression_str,
-        response.content
-    )
+        mode_indicator,
+        compression_str
+    );
+
+    if show_budget {
+        let percentage = if response.max_tokens > 0 {
+            (response.tokens_consumed * 100) / response.max_tokens
+        } else {
+            0
+        };
+
+        let status_str = match response.budget_status {
+            BudgetStatus::Ok => "Ok".to_string(),
+            BudgetStatus::WarningThreshold => "Warning".to_string(),
+            BudgetStatus::Exceeded => "Exceeded".to_string(),
+        };
+
+        output.push_str(&format!(
+            "Budget: {}/{} tokens ({}%, status: {})\n",
+            response.tokens_consumed, response.max_tokens, percentage, status_str
+        ));
+    }
+
+    output.push('\n');
+    output.push_str(&response.content);
+    output.push('\n');
+
+    output
 }
 
 fn format_tree_response(response: &crate::app::contracts::TreeResponse) -> String {
@@ -357,6 +393,7 @@ mod tests {
         DoctorCheck, DoctorResponse, ReadMode, ReadResponse, SearchHit, SearchResponse,
         ServiceError, ShellResponse, TreeEntry, TreeResponse,
     };
+    use crate::core::budget::BudgetStatus;
     use std::path::PathBuf;
 
     // Mock services for testing
@@ -373,6 +410,10 @@ mod tests {
                 truncated: false,
                 mode: ReadMode::Full,
                 compression_percent: 0,
+                is_auto_selected: false,
+                tokens_consumed: 100,
+                max_tokens: 1000,
+                budget_status: BudgetStatus::Ok,
             })
         }
     }
@@ -600,6 +641,38 @@ mod tests {
         let result = adapter.run(vec!["-v".to_string()]);
         assert_eq!(result.exit_code, 0);
         assert!(result.output.contains("0.1.0"));
+    }
+
+    #[test]
+    fn test_read_shows_budget_info_by_default() {
+        let adapter = create_test_adapter();
+        let result = adapter.run(vec!["read".to_string(), "test.txt".to_string()]);
+        assert_eq!(result.exit_code, 0);
+        // Budget info should be displayed by default
+        assert!(result.output.contains("Budget:"));
+        assert!(result.output.contains("tokens"));
+        assert!(result.output.contains("status:"));
+        assert!(result.output.contains("Ok"));
+    }
+
+    #[test]
+    fn test_read_hides_budget_with_no_budget_flag() {
+        let adapter = create_test_adapter();
+        let result = adapter.run(vec!["read".to_string(), "--no-budget".to_string(), "test.txt".to_string()]);
+        assert_eq!(result.exit_code, 0);
+        // Budget info should be hidden with --no-budget flag
+        assert!(!result.output.contains("Budget:"));
+        // But content should still be there
+        assert!(result.output.contains("test content"));
+    }
+
+    #[test]
+    fn test_read_with_mode_shows_auto_selected_indicator() {
+        let adapter = create_test_adapter();
+        let result = adapter.run(vec!["read".to_string(), "--mode".to_string(), "signatures".to_string(), "test.txt".to_string()]);
+        assert_eq!(result.exit_code, 0);
+        // Mode is not auto-selected when explicitly provided
+        assert!(!result.output.contains("auto-selected"));
     }
 
     // Tests for service error handling

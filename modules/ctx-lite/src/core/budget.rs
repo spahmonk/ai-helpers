@@ -36,6 +36,10 @@ impl ContextBudget {
         }
     }
 
+    pub fn status(&self) -> BudgetStatus {
+        self.check_status()
+    }
+
     pub fn percentage_used(&self) -> f32 {
         if self.max_tokens == 0 {
             0.0
@@ -50,6 +54,10 @@ impl ContextBudget {
 
     pub fn used(&self) -> usize {
         self.consumed_tokens
+    }
+
+    pub fn max_tokens(&self) -> usize {
+        self.max_tokens
     }
 }
 

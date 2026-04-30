@@ -62,7 +62,8 @@ impl FileReader {
             .map_err(|error| ServiceError::unsupported(error.message))?;
 
         // Step 1: Determine mode - use auto-selection if Full mode requested
-        let selected_mode = if request.mode == ReadMode::Full {
+        let is_auto_selected = request.mode == ReadMode::Full;
+        let selected_mode = if is_auto_selected {
             self.policy.select_mode(path.path(), request.max_bytes)
         } else {
             request.mode
@@ -93,6 +94,10 @@ impl FileReader {
                 let mut budget = self.budget.lock().unwrap();
                 budget.consume(1);
                 
+                let budget_status = budget.status();
+                let tokens_consumed = budget.used();
+                let max_tokens = budget.max_tokens();
+                
                 return Ok(ReadResponse {
                     bytes_read,
                     content: cached_result,
@@ -100,6 +105,10 @@ impl FileReader {
                     truncated,
                     mode: selected_mode,
                     compression_percent: 99, // Cache hits are ~99% compression
+                    is_auto_selected,
+                    tokens_consumed,
+                    max_tokens,
+                    budget_status,
                 });
             }
         }
@@ -130,10 +139,11 @@ impl FileReader {
 
         // Step 6: Track budget consumption
         let read_cost = (bytes_read / 4).min(1000);
-        {
+        let (budget_status, tokens_consumed, max_tokens) = {
             let mut budget = self.budget.lock().unwrap();
             budget.consume(read_cost);
-        }
+            (budget.status(), budget.used(), budget.max_tokens())
+        };
 
         // Step 7: Store in cache for future reads
         {
@@ -156,6 +166,10 @@ impl FileReader {
             truncated,
             mode: selected_mode,
             compression_percent,
+            is_auto_selected,
+            tokens_consumed,
+            max_tokens,
+            budget_status,
         })
     }
 }

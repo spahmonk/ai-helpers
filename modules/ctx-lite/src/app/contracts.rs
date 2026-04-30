@@ -1,6 +1,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use crate::core::{
+    budget::BudgetStatus,
     config::AppConfig,
     shell::{normalize_and_validate_command, NormalizedShellCommand},
 };
@@ -53,6 +54,10 @@ pub struct ReadResponse {
     pub truncated: bool,
     pub mode: ReadMode,
     pub compression_percent: usize,
+    pub is_auto_selected: bool,
+    pub tokens_consumed: usize,
+    pub max_tokens: usize,
+    pub budget_status: BudgetStatus,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

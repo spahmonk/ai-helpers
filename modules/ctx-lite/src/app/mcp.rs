@@ -416,7 +416,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::contracts::ReadMode;
+    use crate::core::budget::BudgetStatus;
     use serde_json::json;
 
     // Mock service implementations for testing
@@ -434,6 +434,10 @@ mod tests {
                 truncated: false,
                 mode: request.mode,
                 compression_percent: 0,
+                is_auto_selected: false,
+                tokens_consumed: 100,
+                max_tokens: 1000,
+                budget_status: BudgetStatus::Ok,
             })
         }
     }
