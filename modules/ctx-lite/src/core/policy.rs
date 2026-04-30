@@ -1,5 +1,5 @@
 use std::path::Path;
-use crate::app::contracts::ReadMode;
+use crate::core::cache::ReadMode;
 
 /// Adaptive policy for selecting the best compression mode per file type.
 ///

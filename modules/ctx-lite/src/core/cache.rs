@@ -7,8 +7,20 @@ use std::time::SystemTime;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum ReadMode {
     Full,
-    Partial,
-    Semantic,
+    Signatures,
+    Map,
+    Diff,
+}
+
+impl ReadMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ReadMode::Full => "full",
+            ReadMode::Signatures => "signatures",
+            ReadMode::Map => "map",
+            ReadMode::Diff => "diff",
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -95,11 +107,11 @@ impl SemanticCache {
             self.evict_lru();
         }
 
-        let key = create_cache_key(path, &result, mode);
+        let key = create_cache_key(path, &content, mode);
         self.cache.insert(
             key,
             CacheEntry {
-                content,
+                content: result,
                 compression_percent,
                 timestamp: SystemTime::now(),
                 file_mtime: mtime,
@@ -282,9 +294,9 @@ mod tests {
         cache.insert(
             path,
             content.to_string(),
-            "result_partial".to_string(),
+            "result_signatures".to_string(),
             75,
-            ReadMode::Partial,
+            ReadMode::Signatures,
             now,
         );
 
@@ -294,12 +306,12 @@ mod tests {
             Some("result_full".to_string())
         );
         assert_eq!(
-            cache.get(path, content, ReadMode::Partial, now),
-            Some("result_partial".to_string())
+            cache.get(path, content, ReadMode::Signatures, now),
+            Some("result_signatures".to_string())
         );
 
         // Wrong mode should miss
-        assert_eq!(cache.get(path, content, ReadMode::Semantic, now), None);
+        assert_eq!(cache.get(path, content, ReadMode::Diff, now), None);
     }
 
     #[test]

@@ -48,10 +48,10 @@ fn cache_different_read_modes_are_separate_entries() {
     let now = SystemTime::now();
     
     cache.insert(&path, value_full.to_string(), cache_key.to_string(), 50, ReadMode::Full, now);
-    cache.insert(&path, value_partial.to_string(), cache_key.to_string(), 80, ReadMode::Partial, now);
+    cache.insert(&path, value_partial.to_string(), cache_key.to_string(), 80, ReadMode::Signatures, now);
     
     let full_result = cache.get(&path, cache_key, ReadMode::Full, now);
-    let partial_result = cache.get(&path, cache_key, ReadMode::Partial, now);
+    let partial_result = cache.get(&path, cache_key, ReadMode::Signatures, now);
     
     assert_eq!(full_result.unwrap(), value_full);
     assert_eq!(partial_result.unwrap(), value_partial);
@@ -139,7 +139,7 @@ fn cache_all_read_modes() {
     let mut cache = SemanticCache::new(100);
     let path = PathBuf::from("test.rs");
     let cache_key = "key";
-    let modes = vec![ReadMode::Full, ReadMode::Partial, ReadMode::Semantic];
+    let modes = vec![ReadMode::Full, ReadMode::Signatures, ReadMode::Diff];
     let now = SystemTime::now();
     
     for (i, mode) in modes.iter().enumerate() {
@@ -246,7 +246,7 @@ fn policy_unknown_files_handled() {
 #[test]
 fn policy_user_preference_respected() {
     let path = PathBuf::from("file.rs");
-    let mode = AdaptivePolicy::select_mode(&path, 100, Some(ctx_lite::app::contracts::ReadMode::Full));
+    let mode = AdaptivePolicy::select_mode(&path, 100, Some(ReadMode::Full));
     let _ = mode;
 }
 
@@ -512,7 +512,7 @@ fn integration_cache_with_multiple_modes_same_file() {
     let now = SystemTime::now();
     
     let path = PathBuf::from("source.py");
-    let modes = vec![ReadMode::Full, ReadMode::Partial, ReadMode::Semantic];
+    let modes = vec![ReadMode::Full, ReadMode::Signatures, ReadMode::Diff];
     
     for (i, mode) in modes.iter().enumerate() {
         let key = format!("key_{}", i);
@@ -662,7 +662,7 @@ fn integration_stress_test_mixed_operations() {
     let mut budget = ContextBudget::new(10000);
     let now = SystemTime::now();
     
-    let modes = vec![ReadMode::Full, ReadMode::Partial, ReadMode::Semantic];
+    let modes = vec![ReadMode::Full, ReadMode::Signatures, ReadMode::Diff];
     
     for round in 0..20 {
         for (i, mode) in modes.iter().enumerate() {
@@ -697,7 +697,7 @@ fn integration_three_system_final_test() {
         
         if budget.used() + tokens <= 3000 && cache.size() < 50 {
             budget.consume(tokens);
-            cache.insert(&path, value, key, tokens, ReadMode::Partial, now);
+            cache.insert(&path, value, key, tokens, ReadMode::Signatures, now);
         }
     }
     
