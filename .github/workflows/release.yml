@@ -57,7 +57,10 @@ jobs:
         working-directory: repo/modules/ctx-lite
         run: |
           cargo clean
-          cargo build --release --bin ctx-lite --target ${{ matrix.target }}
+          cargo build --release --bin ctx-lite
+          # Copy to target-specific directory for consistent paths
+          mkdir -p target/${{ matrix.target }}/release
+          cp target/release/ctx-lite target/${{ matrix.target }}/release/ctx-lite
 
       - name: Strip binary (Unix)
         if: runner.os != 'Windows'
@@ -81,6 +84,11 @@ jobs:
         run: |
           $version = "${{ github.ref }}".substring("refs/tags/v".length)
           $archive = "ctx-lite-${version}-${{ matrix.target }}.zip"
+          # Copy exe to target-specific directory if not already there
+          if (-not (Test-Path "target/${{ matrix.target }}/release")) {
+            New-Item -ItemType Directory -Path "target/${{ matrix.target }}/release" -Force | Out-Null
+            Copy-Item -Path "target/release/ctx-lite.exe" -Destination "target/${{ matrix.target }}/release/ctx-lite.exe"
+          }
           7z a $archive target/${{ matrix.target }}/release/ctx-lite.exe
           Get-Item $archive | Format-List Length
 
