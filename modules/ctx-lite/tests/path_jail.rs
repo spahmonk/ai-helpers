@@ -3,7 +3,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use ctx_lite::app::contracts::{ReadRequestNormalized, ServiceErrorKind, TreeRequestNormalized};
+use ctx_lite::app::contracts::{
+    ReadMode, ReadRequestNormalized, ServiceErrorKind, TreeRequestNormalized,
+};
 use ctx_lite::core::config::AppConfig;
 use ctx_lite::core::fs::{FileReader, TreeBuilder};
 use ctx_lite::core::security::path_jail::{PathJail, PathJailErrorKind};
@@ -84,6 +86,7 @@ fn file_reader_reads_files_inside_fixture_repo() {
         .read(ReadRequestNormalized {
             path: fixture.repo_root.join("README.md"),
             max_bytes: 1024,
+            mode: ReadMode::Full,
         })
         .expect("file reader should read files inside the root");
 
@@ -113,6 +116,7 @@ fn file_reader_rejects_hard_links_to_outside_files() {
         .read(ReadRequestNormalized {
             path: link_path,
             max_bytes: 1024,
+            mode: ReadMode::Full,
         })
         .expect_err("file reader should reject hard links to files outside the root");
 
@@ -134,7 +138,11 @@ fn file_reader_enforces_byte_limits_on_utf8_boundaries() {
     );
 
     let response = reader
-        .read(ReadRequestNormalized { path, max_bytes: 3 })
+        .read(ReadRequestNormalized {
+            path,
+            max_bytes: 3,
+            mode: ReadMode::Full,
+        })
         .expect("reader should return the valid utf-8 prefix within the byte limit");
 
     assert_eq!(response.content, "é");
@@ -152,7 +160,11 @@ fn file_reader_stops_before_invalid_utf8_after_limit() {
     );
 
     let response = reader
-        .read(ReadRequestNormalized { path, max_bytes: 3 })
+        .read(ReadRequestNormalized {
+            path,
+            max_bytes: 3,
+            mode: ReadMode::Full,
+        })
         .expect("reader should not decode bytes past the configured limit");
 
     assert_eq!(response.content, "ok\n");

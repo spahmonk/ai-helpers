@@ -1,16 +1,15 @@
 use ctx_lite::app::cli::CliAdapter;
 use ctx_lite::app::contracts::{
-    DoctorRequest, DoctorResponse, DoctorService, ReadRequestNormalized, ReadResponse,
-    ReadService, SearchRequestNormalized, SearchResponse, SearchService, ServiceError,
-    ShellRequestNormalized, ShellResponse, ShellService, TreeRequestNormalized, TreeResponse,
-    TreeService,
+    DoctorRequest, DoctorResponse, DoctorService, ReadRequestNormalized, ReadResponse, ReadService,
+    SearchRequestNormalized, SearchResponse, SearchService, ServiceError, ShellRequestNormalized,
+    ShellResponse, ShellService, TreeRequestNormalized, TreeResponse, TreeService,
 };
 use ctx_lite::core::config::AppConfig;
 use ctx_lite::core::doctor::{CheckSeverity, DoctorService as DoctorServiceImpl};
 use ctx_lite::core::fs::{FileReader, TreeBuilder};
 use ctx_lite::core::search::SearchService as SearchServiceImpl;
-use ctx_lite::core::shell::ShellExecutor;
 use ctx_lite::core::security::path_jail::PathJail;
+use ctx_lite::core::shell::ShellExecutor;
 
 // Wrapper types to implement the service traits with the core services
 
@@ -123,11 +122,16 @@ fn main() {
         config: config.clone(),
     };
 
-    let cli = CliAdapter::new(config, read_adapter, tree_adapter, search_adapter, shell_adapter, doctor_adapter);
+    let cli = CliAdapter::new(
+        config,
+        read_adapter,
+        tree_adapter,
+        search_adapter,
+        shell_adapter,
+        doctor_adapter,
+    );
 
     let result = cli.run(args);
     print!("{}", result.output);
     std::process::exit(result.exit_code);
 }
-
-

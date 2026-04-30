@@ -1,0 +1,614 @@
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/cli.rs:117:
+     }
+ 
+     fn handle_tree(&self, args: &[String]) -> CliResult {
+[31m-        let path = if args.is_empty() { None } else { Some(args[0].clone()) };
+[m[32m+        let path = if args.is_empty() {
+[m[32m+            None
+[m[32m+        } else {
+[m[32m+            Some(args[0].clone())
+[m[32m+        };
+[m 
+         let request = TreeRequest {
+             path: path.unwrap_or_default(),
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/cli.rs:154:
+         let query_start = if args[0] == "--mode" {
+             if args.len() < 3 {
+                 return CliResult {
+[31m-                    output: "Error: search with --mode requires a mode and query argument\n".to_string(),
+[m[32m+                    output: "Error: search with --mode requires a mode and query argument\n"
+[m[32m+                        .to_string(),
+[m                     exit_code: 1,
+                 };
+             }
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/cli.rs:242:
+ }
+ 
+ fn format_read_response(response: &crate::app::contracts::ReadResponse) -> String {
+[31m-    format!(
+[m[31m-        "{}\n{}",
+[m[31m-        response.path.display(),
+[m[31m-        response.content
+[m[31m-    )
+[m[32m+    format!("{}\n{}", response.path.display(), response.content)
+[m }
+ 
+ fn format_tree_response(response: &crate::app::contracts::TreeResponse) -> String {
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/cli.rs:278:
+ }
+ 
+ fn format_shell_response(response: &crate::app::contracts::ShellResponse) -> String {
+[31m-    format!("$ {}\n{}{}", response.command, response.stdout, response.stderr)
+[m[32m+    format!(
+[m[32m+        "$ {}\n{}{}",
+[m[32m+        response.command, response.stdout, response.stderr
+[m[32m+    )
+[m }
+ 
+ fn format_doctor_response(response: &crate::app::contracts::DoctorResponse) -> String {
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/cli.rs:298:
+ mod tests {
+     use super::*;
+     use crate::app::contracts::{
+[31m-        DoctorCheck, DoctorResponse, ReadMode, ReadResponse, SearchHit, SearchResponse, ServiceError,
+[m[31m-        ShellResponse, TreeEntry, TreeResponse,
+[m[32m+        DoctorCheck, DoctorResponse, ReadMode, ReadResponse, SearchHit, SearchResponse,
+[m[32m+        ServiceError, ShellResponse, TreeEntry, TreeResponse,
+[m     };
+     use std::path::PathBuf;
+ 
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/mcp.rs:233:
+             .and_then(|v| v.as_u64())
+             .map(|v| v as usize);
+ 
+[31m-        let mode = arguments
+[m[31m-            .get("mode")
+[m[31m-            .and_then(|v| v.as_str())
+[m[31m-            .and_then(|mode_str| match mode_str {
+[m[31m-                "full" => Some(crate::app::contracts::ReadMode::Full),
+[m[31m-                "signatures" => Some(crate::app::contracts::ReadMode::Signatures),
+[m[31m-                "map" => Some(crate::app::contracts::ReadMode::Map),
+[m[31m-                "diff" => Some(crate::app::contracts::ReadMode::Diff),
+[m[31m-                _ => None,
+[m[31m-            });
+[m[32m+        let mode =
+[m[32m+            arguments
+[m[32m+                .get("mode")
+[m[32m+                .and_then(|v| v.as_str())
+[m[32m+                .and_then(|mode_str| match mode_str {
+[m[32m+                    "full" => Some(crate::app::contracts::ReadMode::Full),
+[m[32m+                    "signatures" => Some(crate::app::contracts::ReadMode::Signatures),
+[m[32m+                    "map" => Some(crate::app::contracts::ReadMode::Map),
+[m[32m+                    "diff" => Some(crate::app::contracts::ReadMode::Diff),
+[m[32m+                    _ => None,
+[m[32m+                });
+[m 
+[31m-        let request = ReadRequest { path, max_bytes, mode };
+[m[31m-        let normalized = request
+[m[31m-            .normalize(&self.config)
+[m[31m-            .map_err(|e| e.reason)?;
+[m[31m-        let response = self
+[m[31m-            .read
+[m[31m-            .read(normalized)
+[m[31m-            .map_err(|e| e.message)?;
+[m[32m+        let request = ReadRequest {
+[m[32m+            path,
+[m[32m+            max_bytes,
+[m[32m+            mode,
+[m[32m+        };
+[m[32m+        let normalized = request.normalize(&self.config).map_err(|e| e.reason)?;
+[m[32m+        let response = self.read.read(normalized).map_err(|e| e.message)?;
+[m 
+         Ok(json!({
+             "jsonrpc": "2.0",
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/mcp.rs:286:
+             max_depth,
+             include_hidden,
+         };
+[31m-        let normalized = request
+[m[31m-            .normalize(&self.config)
+[m[31m-            .map_err(|e| e.reason)?;
+[m[31m-        let response = self
+[m[31m-            .tree
+[m[31m-            .tree(normalized)
+[m[31m-            .map_err(|e| e.message)?;
+[m[32m+        let normalized = request.normalize(&self.config).map_err(|e| e.reason)?;
+[m[32m+        let response = self.tree.tree(normalized).map_err(|e| e.message)?;
+[m 
+         let entries: Vec<Value> = response
+             .entries
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/mcp.rs:329:
+ 
+         let request = SearchRequest { query, limit };
+         let normalized = request.normalize(&self.config);
+[31m-        let response = self
+[m[31m-            .search
+[m[31m-            .search(normalized)
+[m[31m-            .map_err(|e| e.message)?;
+[m[32m+        let response = self.search.search(normalized).map_err(|e| e.message)?;
+[m 
+         let hits: Vec<Value> = response
+             .hits
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/mcp.rs:368:
+             .map(|s| s.to_string());
+ 
+         let request = ShellRequest { command, cwd };
+[31m-        let normalized = request
+[m[31m-            .normalize(&self.config)
+[m[31m-            .map_err(|e| e.reason)?;
+[m[31m-        let response = self
+[m[31m-            .shell
+[m[31m-            .shell(normalized)
+[m[31m-            .map_err(|e| e.message)?;
+[m[32m+        let normalized = request.normalize(&self.config).map_err(|e| e.reason)?;
+[m[32m+        let response = self.shell.shell(normalized).map_err(|e| e.message)?;
+[m 
+         Ok(json!({
+             "jsonrpc": "2.0",
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/mcp.rs:403:
+             include_shell_policy,
+         };
+ 
+[31m-        let response = self
+[m[31m-            .doctor
+[m[31m-            .doctor(request)
+[m[31m-            .map_err(|e| e.message)?;
+[m[32m+        let response = self.doctor.doctor(request).map_err(|e| e.message)?;
+[m 
+         let checks: Vec<Value> = response
+             .checks
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/mcp.rs:432:
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+[31m-    use serde_json::json;
+[m     use crate::app::contracts::ReadMode;
+[32m+    use serde_json::json;
+[m 
+     // Mock service implementations for testing
+     struct MockReadService;
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/mcp.rs:441:
+         fn read(
+             &self,
+             _request: crate::app::contracts::ReadRequestNormalized,
+[31m-        ) -> Result<crate::app::contracts::ReadResponse, crate::app::contracts::ServiceError> {
+[m[32m+        ) -> Result<crate::app::contracts::ReadResponse, crate::app::contracts::ServiceError>
+[m[32m+        {
+[m             Ok(crate::app::contracts::ReadResponse {
+                 path: std::path::PathBuf::from("/test/file.txt"),
+                 content: "test content".to_string(),
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/mcp.rs:458:
+         fn tree(
+             &self,
+             request: crate::app::contracts::TreeRequestNormalized,
+[31m-        ) -> Result<crate::app::contracts::TreeResponse, crate::app::contracts::ServiceError> {
+[m[32m+        ) -> Result<crate::app::contracts::TreeResponse, crate::app::contracts::ServiceError>
+[m[32m+        {
+[m             Ok(crate::app::contracts::TreeResponse {
+                 root: request.path,
+                 entries: vec![],
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/mcp.rs:471:
+         fn search(
+             &self,
+             request: crate::app::contracts::SearchRequestNormalized,
+[31m-        ) -> Result<crate::app::contracts::SearchResponse, crate::app::contracts::ServiceError> {
+[m[32m+        ) -> Result<crate::app::contracts::SearchResponse, crate::app::contracts::ServiceError>
+[m[32m+        {
+[m             Ok(crate::app::contracts::SearchResponse {
+                 query: request.query,
+                 hits: vec![],
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/mcp.rs:484:
+         fn shell(
+             &self,
+             request: crate::app::contracts::ShellRequestNormalized,
+[31m-        ) -> Result<crate::app::contracts::ShellResponse, crate::app::contracts::ServiceError> {
+[m[32m+        ) -> Result<crate::app::contracts::ShellResponse, crate::app::contracts::ServiceError>
+[m[32m+        {
+[m             Ok(crate::app::contracts::ShellResponse {
+                 command: request.command.rendered(),
+                 stdout: "shell output".to_string(),
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/app/mcp.rs:499:
+         fn doctor(
+             &self,
+             _request: DoctorRequest,
+[31m-        ) -> Result<crate::app::contracts::DoctorResponse, crate::app::contracts::ServiceError> {
+[m[32m+        ) -> Result<crate::app::contracts::DoctorResponse, crate::app::contracts::ServiceError>
+[m[32m+        {
+[m             Ok(crate::app::contracts::DoctorResponse {
+                 checks: vec![crate::app::contracts::DoctorCheck {
+                     name: "test_check".to_string(),
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/doctor.rs:72:
+             DoctorCheck {
+                 name: "project_root_exists".to_string(),
+                 severity: CheckSeverity::Ok,
+[31m-                message: format!(
+[m[31m-                    "Project root exists: {}",
+[m[31m-                    config.project_root.display()
+[m[31m-                ),
+[m[32m+                message: format!("Project root exists: {}", config.project_root.display()),
+[m             }
+         }
+     }
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/doctor.rs:123:
+             DoctorCheck {
+                 name: "shell_policy_presence".to_string(),
+                 severity: CheckSeverity::Ok,
+[31m-                message: format!("Shell allowlist has {} entries", config.shell_whitelist.len()),
+[m[32m+                message: format!(
+[m[32m+                    "Shell allowlist has {} entries",
+[m[32m+                    config.shell_whitelist.len()
+[m[32m+                ),
+[m             }
+         }
+     }
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/doctor.rs:248:
+         let report = DoctorService::run(&config);
+ 
+         assert_eq!(report.overall_severity, CheckSeverity::Ok);
+[31m-        assert!(report.checks.iter().all(|c| c.severity == CheckSeverity::Ok));
+[m[32m+        assert!(report
+[m[32m+            .checks
+[m[32m+            .iter()
+[m[32m+            .all(|c| c.severity == CheckSeverity::Ok));
+[m     }
+ 
+     #[test]
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/doctor.rs:267:
+         let report = DoctorService::run(&config);
+ 
+         assert!(report.checks.len() >= 3);
+[31m-        assert!(report.checks.iter().any(|c| c.name == "project_root_exists"));
+[m[32m+        assert!(report
+[m[32m+            .checks
+[m[32m+            .iter()
+[m[32m+            .any(|c| c.name == "project_root_exists"));
+[m         assert!(report.checks.iter().any(|c| c.name == "storage_sanity"));
+[31m-        assert!(report.checks.iter().any(|c| c.name == "shell_policy_presence"));
+[m[32m+        assert!(report
+[m[32m+            .checks
+[m[32m+            .iter()
+[m[32m+            .any(|c| c.name == "shell_policy_presence"));
+[m     }
+ 
+     #[test]
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/doctor.rs:290:
+         assert_eq!(report.overall_severity, CheckSeverity::Error);
+     }
+ }
+[31m-
+[m 
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/mod.rs:8:
+ pub mod shell;
+ pub mod signatures;
+ pub mod stats;
+[31m-
+[m 
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/search/mod.rs:141:
+ }
+ 
+ /// Read file content up to a size limit, ensuring UTF-8 validity
+[31m-fn read_utf8_prefix(file: &mut dyn Read, max_bytes: usize) -> Result<(String, usize), ServiceError> {
+[m[32m+fn read_utf8_prefix(
+[m[32m+    file: &mut dyn Read,
+[m[32m+    max_bytes: usize,
+[m[32m+) -> Result<(String, usize), ServiceError> {
+[m     let mut buf = vec![0u8; max_bytes];
+     let bytes_read = file
+         .read(&mut buf)
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/search/mod.rs:165:
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+[32m+    use crate::core::config::AppConfig;
+[m     use std::fs::File;
+     use std::io::Write;
+     use tempfile::TempDir;
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/search/mod.rs:171:
+[31m-    use crate::core::config::AppConfig;
+[m 
+     fn setup_test_dir() -> (TempDir, PathBuf) {
+         let temp = TempDir::new().expect("failed to create temp dir");
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/shell.rs:76:
+             .resolve(cwd)
+             .map_err(shell_policy_from_path_jail)?;
+         let mut child = Command::new(&command.program);
+[31m-        
+[m[32m+
+[m         // Harden git commands by disabling config-injection vectors
+         let args = if command.program == "git" {
+             augment_git_args(&command.args)
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/shell.rs:83:
+         } else {
+             command.args.clone()
+         };
+[31m-        
+[m[32m+
+[m         child
+             .args(&args)
+             .current_dir(resolved_cwd.path())
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/shell.rs:279:
+         String::from("-c"),
+         String::from("diff.external=false"),
+     ];
+[31m-    
+[m[32m+
+[m     // Add --no-ext-diff for diff commands specifically
+     if !args.is_empty() && args[0] == "diff" {
+         augmented.push(String::from("--no-ext-diff"));
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/shell.rs:286:
+     }
+[31m-    
+[m[32m+
+[m     augmented.extend_from_slice(args);
+     augmented
+ }
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/signatures.rs:3:
+ 
+ /// Extract function/class/method signatures from code
+ pub fn extract_signatures(content: &str, path: &Path) -> String {
+[31m-    let file_ext = path
+[m[31m-        .extension()
+[m[31m-        .and_then(|s| s.to_str())
+[m[31m-        .unwrap_or("");
+[m[32m+    let file_ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+[m 
+     match file_ext {
+         "rs" => extract_rust_signatures(content),
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/signatures.rs:42:
+             || trimmed.starts_with("pub trait ")
+             || trimmed.starts_with("trait ")
+         {
+[31m-            sigs.push(format!("{}", trimmed.split('{').next().unwrap_or(trimmed).trim()));
+[m[32m+            sigs.push(format!(
+[m[32m+                "{}",
+[m[32m+                trimmed.split('{').next().unwrap_or(trimmed).trim()
+[m[32m+            ));
+[m         } else if trimmed.starts_with("impl ") {
+             if let Some(impl_part) = trimmed.split('{').next() {
+                 sigs.push(impl_part.to_string());
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/core/signatures.rs:182:
+ fn extract_c_signatures(content: &str) -> String {
+     extract_cpp_signatures(content)
+ }
+[31m-
+[m 
+ #[cfg(test)]
+ mod tests {
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/main.rs:1:
+ use ctx_lite::app::cli::CliAdapter;
+ use ctx_lite::app::contracts::{
+[31m-    DoctorRequest, DoctorResponse, DoctorService, ReadRequestNormalized, ReadResponse,
+[m[31m-    ReadService, SearchRequestNormalized, SearchResponse, SearchService, ServiceError,
+[m[31m-    ShellRequestNormalized, ShellResponse, ShellService, TreeRequestNormalized, TreeResponse,
+[m[31m-    TreeService,
+[m[32m+    DoctorRequest, DoctorResponse, DoctorService, ReadRequestNormalized, ReadResponse, ReadService,
+[m[32m+    SearchRequestNormalized, SearchResponse, SearchService, ServiceError, ShellRequestNormalized,
+[m[32m+    ShellResponse, ShellService, TreeRequestNormalized, TreeResponse, TreeService,
+[m };
+ use ctx_lite::core::config::AppConfig;
+ use ctx_lite::core::doctor::{CheckSeverity, DoctorService as DoctorServiceImpl};
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/main.rs:10:
+ use ctx_lite::core::fs::{FileReader, TreeBuilder};
+ use ctx_lite::core::search::SearchService as SearchServiceImpl;
+[31m-use ctx_lite::core::shell::ShellExecutor;
+[m use ctx_lite::core::security::path_jail::PathJail;
+[32m+use ctx_lite::core::shell::ShellExecutor;
+[m 
+ // Wrapper types to implement the service traits with the core services
+ 
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/main.rs:123:
+         config: config.clone(),
+     };
+ 
+[31m-    let cli = CliAdapter::new(config, read_adapter, tree_adapter, search_adapter, shell_adapter, doctor_adapter);
+[m[32m+    let cli = CliAdapter::new(
+[m[32m+        config,
+[m[32m+        read_adapter,
+[m[32m+        tree_adapter,
+[m[32m+        search_adapter,
+[m[32m+        shell_adapter,
+[m[32m+        doctor_adapter,
+[m[32m+    );
+[m 
+     let result = cli.run(args);
+     print!("{}", result.output);
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/src/main.rs:130:
+     std::process::exit(result.exit_code);
+ }
+[31m-
+[m[31m-
+[m 
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/path_jail.rs:3:
+ use std::path::{Path, PathBuf};
+ use std::sync::atomic::{AtomicUsize, Ordering};
+ 
+[31m-use ctx_lite::app::contracts::{ReadMode, ReadRequestNormalized, ServiceErrorKind, TreeRequestNormalized};
+[m[32m+use ctx_lite::app::contracts::{
+[m[32m+    ReadMode, ReadRequestNormalized, ServiceErrorKind, TreeRequestNormalized,
+[m[32m+};
+[m use ctx_lite::core::config::AppConfig;
+ use ctx_lite::core::fs::{FileReader, TreeBuilder};
+ use ctx_lite::core::security::path_jail::{PathJail, PathJailErrorKind};
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/path_jail.rs:136:
+     );
+ 
+     let response = reader
+[31m-        .read(ReadRequestNormalized { path, max_bytes: 3, mode: ReadMode::Full })
+[m[32m+        .read(ReadRequestNormalized {
+[m[32m+            path,
+[m[32m+            max_bytes: 3,
+[m[32m+            mode: ReadMode::Full,
+[m[32m+        })
+[m         .expect("reader should return the valid utf-8 prefix within the byte limit");
+ 
+     assert_eq!(response.content, "é");
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/path_jail.rs:154:
+     );
+ 
+     let response = reader
+[31m-        .read(ReadRequestNormalized { path, max_bytes: 3, mode: ReadMode::Full })
+[m[32m+        .read(ReadRequestNormalized {
+[m[32m+            path,
+[m[32m+            max_bytes: 3,
+[m[32m+            mode: ReadMode::Full,
+[m[32m+        })
+[m         .expect("reader should not decode bytes past the configured limit");
+ 
+     assert_eq!(response.content, "ok\n");
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:1:
+ /// End-to-end smoke tests for ctx-lite binary
+ /// Tests verify the packaged binary works correctly with common workflows
+[31m-
+[m use std::process::Command;
+ use std::time::Instant;
+ 
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:25:
+ fn smoke_cli_help_command() {
+     let (success, output) = run_ctx_lite(&["--help"]);
+     assert!(success, "help should exit successfully");
+[31m-    assert!(output.contains("ctx-lite"), "help should mention binary name");
+[m     assert!(
+[32m+        output.contains("ctx-lite"),
+[m[32m+        "help should mention binary name"
+[m[32m+    );
+[m[32m+    assert!(
+[m         output.contains("USAGE") || output.contains("Usage"),
+         "help should show usage text"
+     );
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:46:
+ fn smoke_cli_version_command() {
+     let (success, output) = run_ctx_lite(&["--version"]);
+     assert!(success, "version should exit successfully");
+[31m-    assert!(output.contains("ctx-lite"), "version should mention binary name");
+[m[32m+    assert!(
+[m[32m+        output.contains("ctx-lite"),
+[m[32m+        "version should mention binary name"
+[m[32m+    );
+[m     assert!(output.contains("0.1"), "version should show version number");
+ }
+ 
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:54:
+ fn smoke_cli_version_short_flag() {
+     let (success, output) = run_ctx_lite(&["-v"]);
+     assert!(success, "-v should work like --version");
+[31m-    assert!(output.contains("ctx-lite"), "version should mention binary name");
+[m[32m+    assert!(
+[m[32m+        output.contains("ctx-lite"),
+[m[32m+        "version should mention binary name"
+[m[32m+    );
+[m }
+ 
+ #[test]
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:79:
+ fn smoke_read_cargo_toml() {
+     let (success, output) = run_ctx_lite(&["read", "Cargo.toml"]);
+     assert!(success, "read should succeed for Cargo.toml");
+[31m-    assert!(output.contains("[") || output.contains("package"), "should contain toml content");
+[m[32m+    assert!(
+[m[32m+        output.contains("[") || output.contains("package"),
+[m[32m+        "should contain toml content"
+[m[32m+    );
+[m }
+ 
+ #[test]
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:86:
+ fn smoke_read_nonexistent_file_fails() {
+     let (success, _output) = run_ctx_lite(&["read", "/nonexistent/path/to/file.txt"]);
+[31m-    assert!(!success, "read should fail for paths outside project root or missing files");
+[m[32m+    assert!(
+[m[32m+        !success,
+[m[32m+        "read should fail for paths outside project root or missing files"
+[m[32m+    );
+[m }
+ 
+ #[test]
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:92:
+ fn smoke_read_without_path_fails() {
+     let (success, output) = run_ctx_lite(&["read"]);
+     assert!(!success, "read without path should fail");
+[31m-    assert!(output.contains("Error") || output.contains("error"), "should show error message");
+[m[32m+    assert!(
+[m[32m+        output.contains("Error") || output.contains("error"),
+[m[32m+        "should show error message"
+[m[32m+    );
+[m }
+ 
+ // ============================================================================
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:119:
+ #[test]
+ fn smoke_search_text_pattern() {
+     let (success, output) = run_ctx_lite(&["search", "ctx"]);
+[31m-    
+[m[32m+
+[m     if success {
+[31m-        assert!(output.contains("Search") || output.contains("results"), 
+[m[31m-                "search output should show search context");
+[m[32m+        assert!(
+[m[32m+            output.contains("Search") || output.contains("results"),
+[m[32m+            "search output should show search context"
+[m[32m+        );
+[m     }
+ }
+ 
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:130:
+ fn smoke_search_without_query_fails() {
+     let (success, output) = run_ctx_lite(&["search"]);
+     assert!(!success, "search without query should fail");
+[31m-    assert!(output.contains("Error") || output.contains("error"), "should show error message");
+[m[32m+    assert!(
+[m[32m+        output.contains("Error") || output.contains("error"),
+[m[32m+        "should show error message"
+[m[32m+    );
+[m }
+ 
+ // ============================================================================
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:150:
+ fn smoke_shell_without_args_fails() {
+     let (success, output) = run_ctx_lite(&["shell"]);
+     assert!(!success, "shell without args should fail");
+[31m-    assert!(output.contains("Error") || output.contains("error"), "should show error");
+[m[32m+    assert!(
+[m[32m+        output.contains("Error") || output.contains("error"),
+[m[32m+        "should show error"
+[m[32m+    );
+[m }
+ 
+ #[test]
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:157:
+ fn smoke_shell_with_only_cwd_fails() {
+     let (success, output) = run_ctx_lite(&["shell", "."]);
+     assert!(!success, "shell with only cwd should fail");
+[31m-    assert!(output.contains("Error") || output.contains("error"), "should show error message");
+[m[32m+    assert!(
+[m[32m+        output.contains("Error") || output.contains("error"),
+[m[32m+        "should show error message"
+[m[32m+    );
+[m }
+ 
+ #[test]
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:165:
+     let (success, output) = run_ctx_lite(&["shell", ".", "echo", "test"]);
+     assert!(!success, "shell should reject non-whitelisted commands");
+     assert!(
+[31m-        output.contains("not allowed") || output.contains("Error"), 
+[m[32m+        output.contains("not allowed") || output.contains("Error"),
+[m         "should indicate command not allowed"
+     );
+ }
+Diff in /home/monk/Workshop/ai-helpers/.worktrees/ctx-lite-opt/modules/ctx-lite/tests/smoke_tests.rs:314:
+ 
+     assert!(help_success, "help should succeed");
+     assert!(version_success, "version should succeed");
+[31m-    assert!(help_output.contains("ctx-lite"), "help should mention binary");
+[m[31m-    assert!(version_output.contains("ctx-lite"), "version should mention binary");
+[m[32m+    assert!(
+[m[32m+        help_output.contains("ctx-lite"),
+[m[32m+        "help should mention binary"
+[m[32m+    );
+[m[32m+    assert!(
+[m[32m+        version_output.contains("ctx-lite"),
+[m[32m+        "version should mention binary"
+[m[32m+    );
+[m }
+ 
+ #[test]

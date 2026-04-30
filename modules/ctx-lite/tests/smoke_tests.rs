@@ -1,6 +1,5 @@
 /// End-to-end smoke tests for ctx-lite binary
 /// Tests verify the packaged binary works correctly with common workflows
-
 use std::process::Command;
 use std::time::Instant;
 
@@ -25,7 +24,10 @@ fn run_ctx_lite(args: &[&str]) -> (bool, String) {
 fn smoke_cli_help_command() {
     let (success, output) = run_ctx_lite(&["--help"]);
     assert!(success, "help should exit successfully");
-    assert!(output.contains("ctx-lite"), "help should mention binary name");
+    assert!(
+        output.contains("ctx-lite"),
+        "help should mention binary name"
+    );
     assert!(
         output.contains("USAGE") || output.contains("Usage"),
         "help should show usage text"
@@ -46,7 +48,10 @@ fn smoke_cli_help_short_flag() {
 fn smoke_cli_version_command() {
     let (success, output) = run_ctx_lite(&["--version"]);
     assert!(success, "version should exit successfully");
-    assert!(output.contains("ctx-lite"), "version should mention binary name");
+    assert!(
+        output.contains("ctx-lite"),
+        "version should mention binary name"
+    );
     assert!(output.contains("0.1"), "version should show version number");
 }
 
@@ -54,7 +59,10 @@ fn smoke_cli_version_command() {
 fn smoke_cli_version_short_flag() {
     let (success, output) = run_ctx_lite(&["-v"]);
     assert!(success, "-v should work like --version");
-    assert!(output.contains("ctx-lite"), "version should mention binary name");
+    assert!(
+        output.contains("ctx-lite"),
+        "version should mention binary name"
+    );
 }
 
 #[test]
@@ -79,20 +87,29 @@ fn smoke_read_readme() {
 fn smoke_read_cargo_toml() {
     let (success, output) = run_ctx_lite(&["read", "Cargo.toml"]);
     assert!(success, "read should succeed for Cargo.toml");
-    assert!(output.contains("[") || output.contains("package"), "should contain toml content");
+    assert!(
+        output.contains("[") || output.contains("package"),
+        "should contain toml content"
+    );
 }
 
 #[test]
 fn smoke_read_nonexistent_file_fails() {
     let (success, _output) = run_ctx_lite(&["read", "/nonexistent/path/to/file.txt"]);
-    assert!(!success, "read should fail for paths outside project root or missing files");
+    assert!(
+        !success,
+        "read should fail for paths outside project root or missing files"
+    );
 }
 
 #[test]
 fn smoke_read_without_path_fails() {
     let (success, output) = run_ctx_lite(&["read"]);
     assert!(!success, "read without path should fail");
-    assert!(output.contains("Error") || output.contains("error"), "should show error message");
+    assert!(
+        output.contains("Error") || output.contains("error"),
+        "should show error message"
+    );
 }
 
 // ============================================================================
@@ -119,10 +136,12 @@ fn smoke_tree_nonexistent_fails() {
 #[test]
 fn smoke_search_text_pattern() {
     let (success, output) = run_ctx_lite(&["search", "ctx"]);
-    
+
     if success {
-        assert!(output.contains("Search") || output.contains("results"), 
-                "search output should show search context");
+        assert!(
+            output.contains("Search") || output.contains("results"),
+            "search output should show search context"
+        );
     }
 }
 
@@ -130,7 +149,10 @@ fn smoke_search_text_pattern() {
 fn smoke_search_without_query_fails() {
     let (success, output) = run_ctx_lite(&["search"]);
     assert!(!success, "search without query should fail");
-    assert!(output.contains("Error") || output.contains("error"), "should show error message");
+    assert!(
+        output.contains("Error") || output.contains("error"),
+        "should show error message"
+    );
 }
 
 // ============================================================================
@@ -150,14 +172,20 @@ fn smoke_shell_git_status() {
 fn smoke_shell_without_args_fails() {
     let (success, output) = run_ctx_lite(&["shell"]);
     assert!(!success, "shell without args should fail");
-    assert!(output.contains("Error") || output.contains("error"), "should show error");
+    assert!(
+        output.contains("Error") || output.contains("error"),
+        "should show error"
+    );
 }
 
 #[test]
 fn smoke_shell_with_only_cwd_fails() {
     let (success, output) = run_ctx_lite(&["shell", "."]);
     assert!(!success, "shell with only cwd should fail");
-    assert!(output.contains("Error") || output.contains("error"), "should show error message");
+    assert!(
+        output.contains("Error") || output.contains("error"),
+        "should show error message"
+    );
 }
 
 #[test]
@@ -165,7 +193,7 @@ fn smoke_shell_disallowed_command_fails() {
     let (success, output) = run_ctx_lite(&["shell", ".", "echo", "test"]);
     assert!(!success, "shell should reject non-whitelisted commands");
     assert!(
-        output.contains("not allowed") || output.contains("Error"), 
+        output.contains("not allowed") || output.contains("Error"),
         "should indicate command not allowed"
     );
 }
@@ -314,8 +342,14 @@ fn smoke_workflow_help_version() {
 
     assert!(help_success, "help should succeed");
     assert!(version_success, "version should succeed");
-    assert!(help_output.contains("ctx-lite"), "help should mention binary");
-    assert!(version_output.contains("ctx-lite"), "version should mention binary");
+    assert!(
+        help_output.contains("ctx-lite"),
+        "help should mention binary"
+    );
+    assert!(
+        version_output.contains("ctx-lite"),
+        "version should mention binary"
+    );
 }
 
 #[test]

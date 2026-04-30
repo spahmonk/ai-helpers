@@ -1,0 +1,194 @@
+warning: unused import: `std::path::PathBuf`
+   --> modules/ctx-lite/src/core/signatures.rs:190:9
+    |
+190 |     use std::path::PathBuf;
+    |         ^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` on by default
+
+warning: `ctx-lite` (lib test) generated 1 warning (run `cargo fix --lib -p ctx-lite --tests` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 0.03s
+     Running unittests src/lib.rs (target/release/deps/ctx_lite-acf5f5bb1934bcfc)
+
+running 93 tests
+test app::cli::tests::test_empty_args_shows_help_with_error_code ... ok
+test app::cli::tests::test_h_flag_shows_help_text ... ok
+test app::cli::tests::test_help_flag_shows_help_text ... ok
+test app::cli::tests::test_invalid_command_returns_usage_error ... ok
+test app::cli::tests::test_parse_doctor_command ... ok
+test app::cli::tests::test_parse_read_command_with_path ... ok
+test app::cli::tests::test_parse_search_command_with_query ... ok
+test app::cli::tests::test_parse_search_with_mode_literal ... ok
+test app::cli::tests::test_parse_shell_command_with_cwd_and_args ... ok
+test app::cli::tests::test_parse_tree_command_with_path ... ok
+test app::cli::tests::test_read_without_path_returns_error ... ok
+test app::cli::tests::test_read_service_error_returns_exit_code_2 ... ok
+test app::cli::tests::test_search_with_mode_requires_query ... ok
+test app::cli::tests::test_search_service_error_returns_exit_code_2 ... ok
+test app::cli::tests::test_search_without_query_returns_error ... ok
+test app::cli::tests::test_shell_without_cwd_returns_error ... ok
+test app::cli::tests::test_tree_without_path_uses_default ... ok
+test app::cli::tests::test_v_flag_shows_version ... ok
+test app::cli::tests::test_version_flag_shows_version ... ok
+test app::contracts::tests::read_and_tree_requests_are_normalized_lexically ... ok
+test app::contracts::tests::read_and_tree_requests_reject_lexical_escape ... ok
+test app::contracts::tests::optional_paths_reject_project_root_outside_allowed_roots ... ok
+test app::contracts::tests::relative_allowed_roots_are_resolved_from_project_root ... ok
+test app::contracts::tests::search_requests_trim_outer_whitespace_without_rewriting_query ... ok
+test app::contracts::tests::shell_requests_are_rejected_by_default ... ok
+test app::contracts::tests::shared_services_can_return_runtime_errors ... ok
+test app::contracts::tests::shell_requests_preserve_internal_whitespace_and_normalize_cwd ... ok
+test app::contracts::tests::shell_requests_normalize_tokens_before_whitelist_match ... ok
+test app::contracts::tests::shell_requests_reject_file_write_commands_with_explicit_reason ... ok
+test app::contracts::tests::shell_requests_reject_redirects_with_explicit_reason ... ok
+test app::contracts::tests::shell_requests_reject_lexical_escape_in_cwd ... ok
+test app::contracts::tests::shell_requests_reject_wrapper_shells_with_explicit_reason ... ok
+test app::contracts::tests::shell_requests_require_whitelisted_command ... ok
+test app::mcp::tests::test_doctor_tool_returns_checks ... ok
+test app::mcp::tests::test_initialize_response_has_correct_structure ... ok
+test app::mcp::tests::test_missing_method_returns_error ... ok
+test app::mcp::tests::test_list_tools_returns_all_tools ... ok
+test app::mcp::tests::test_missing_required_parameters ... ok
+test app::mcp::tests::test_missing_tool_name_returns_error ... ok
+test app::mcp::tests::test_parse_call_read_tool_request ... ok
+test app::mcp::tests::test_parse_initialize_request ... ok
+test app::mcp::tests::test_parse_list_tools_request ... ok
+test app::contracts::tests::shell_requests_reject_injection_like_shapes_with_explicit_reasons ... ok
+test app::mcp::tests::test_read_tool_returns_content ... ok
+test app::mcp::tests::test_response_format_is_valid_jsonrpc ... ok
+test app::mcp::tests::test_search_tool_returns_hits ... ok
+test app::mcp::tests::test_search_tool_with_limit_parameter ... ok
+test app::mcp::tests::test_server_info_has_name_and_version ... ok
+test app::mcp::tests::test_shell_tool_with_cwd_parameter ... ok
+test app::mcp::tests::test_shell_tool_returns_output ... ok
+test app::mcp::tests::test_tool_definitions_have_input_schemas ... ok
+test app::mcp::tests::test_tree_tool_returns_entries ... ok
+test app::mcp::tests::test_unknown_tool_returns_error ... ok
+test app::mcp::tests::test_tree_tool_with_max_depth_parameter ... ok
+test app::mcp::tests::test_unknown_method_returns_error ... ok
+test app::contracts::tests::shell_requests_reject_remote_fetches_with_explicit_reason ... ok
+test core::audit::tests::shell_events_are_redacted_before_persistence ... ok
+test core::doctor::tests::doctor_combines_multiple_checks_into_report ... ok
+test core::audit::tests::shell_events_fully_redact_slash_containing_secrets ... ok
+test core::doctor::tests::doctor_detects_missing_project_root ... ok
+test core::config::tests::defaults_are_safe ... ok
+test core::doctor::tests::doctor_error_takes_precedence_over_warning ... ok
+test core::doctor::tests::doctor_verifies_shell_policy_allowlist_is_non_empty ... ok
+test core::doctor::tests::doctor_warns_if_allowed_roots_contain_network_paths ... ok
+test core::doctor::tests::doctor_reports_ok_when_all_checks_pass ... ok
+test core::doctor::tests::doctor_verifies_project_root_exists ... ok
+test core::doctor::tests::doctor_warns_if_shell_policy_allowlist_is_empty ... ok
+test core::redaction::tests::masks_common_secret_markers ... ok
+test core::redaction::tests::overlapping_keys_are_counted_once ... ok
+test core::redaction::tests::preserves_structured_and_url_like_inputs ... ok
+test core::redaction::tests::redacts_bearer_tokens_with_slashes_without_touching_urls ... ok
+test core::redaction::tests::redacts_shell_quoted_values_with_escaped_quotes_without_corrupting_structure ... ok
+test core::redaction::tests::redacts_slash_containing_secret_values_fully ... ok
+test core::redaction::tests::redacts_json_values_with_escaped_quotes_without_corrupting_structure ... ok
+test core::search::tests::search_rejects_empty_query ... ok
+test core::search::tests::search_handles_empty_results_gracefully ... ok
+test core::search::tests::search_respects_path_jail_containment ... ok
+test core::search::tests::search_returns_stable_response_format ... ok
+test core::search::tests::search_returns_correct_line_numbers ... ok
+test core::search::tests::search_respects_result_count_limit ... ok
+test core::shell::tests::executor_rejects_symlink_escaped_cwd ... ok
+test core::search::tests::search_finds_regex_matches_in_files ... ok
+test core::search::tests::search_supports_literal_text_mode ... ok
+test core::shell::tests::injection_like_shapes_are_rejected_explicitly ... ok
+test core::shell::tests::quoted_tokens_normalize_before_allowlist_matching ... ok
+test core::shell::tests::safe_environment_only_keeps_whitelisted_variables ... ok
+test core::shell::tests::windows_wrapper_commands_are_rejected_explicitly ... ok
+test core::shell::tests::write_commands_are_rejected_explicitly ... ok
+test core::signatures::tests::test_extract_rust_signatures ... ok
+test core::stats::tests::records_safe_aggregates_only ... ok
+test core::signatures::tests::test_extract_python_signatures ... ok
+test core::shell::tests::executor_runs_allowed_git_inspection_commands ... ok
+test core::shell::tests::executor_truncates_large_output_to_configured_limit ... ok
+
+test result: ok. 93 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/release/deps/ctx_lite-2d214bc68525032e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/audit_stats_redaction.rs (target/release/deps/audit_stats_redaction-5df94fa29274ab00)
+
+running 5 tests
+test audit_events_for_file_reads_and_doctor_checks_stay_structured ... ok
+test file_read_audit_events_redact_query_values_without_breaking_paths ... ok
+test audit_events_store_redacted_payloads_for_sensitive_operations ... ok
+test redaction_masks_secrets_before_persistence ... ok
+test stats_snapshots_only_include_safe_aggregates ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cli_help.rs (target/release/deps/cli_help-99f742ad001115ac)
+
+running 1 test
+test binary_shows_help_text ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/path_jail.rs (target/release/deps/path_jail-f25b1571e0377e47)
+
+running 12 tests
+test file_reader_reads_files_inside_fixture_repo ... ok
+test file_reader_rejects_hard_links_to_outside_files ... ok
+test file_reader_enforces_byte_limits_on_utf8_boundaries ... ok
+test file_reader_stops_before_invalid_utf8_after_limit ... ok
+test path_jail_rejects_runtime_root_escape ... ok
+test path_jail_rejects_symlink_escape ... ok
+test resolved_path_rejects_file_swapped_for_outside_symlink_before_open ... ok
+test tree_builder_rejects_hard_links_during_traversal ... ok
+test tree_builder_lists_files_inside_fixture_repo ... ok
+test tree_builder_rejects_symlink_escape_during_traversal ... ok
+test tree_builder_rejects_responses_that_exceed_the_byte_budget ... ok
+test tree_builder_rejects_responses_with_too_many_entries ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/smoke_tests.rs (target/release/deps/smoke_tests-5d822e9e12d3f081)
+
+running 30 tests
+test smoke_binary_exists_and_executable ... ok
+test smoke_cli_help_short_flag ... ok
+test smoke_cli_no_args_shows_help ... ok
+test smoke_cli_help_command ... ok
+test smoke_cli_version_short_flag ... ok
+test smoke_doctor_runs_successfully ... ok
+test smoke_cli_version_command ... ok
+test smoke_doctor_command_fast ... ok
+test smoke_help_command_fast ... ok
+test smoke_doctor_shows_checks ... ok
+test smoke_doctor_with_storage_flag ... ok
+test smoke_invalid_flags_handled ... ok
+test smoke_read_cargo_toml ... ok
+test smoke_read_file_fast ... ok
+test smoke_read_nonexistent_file_fails ... ok
+test smoke_read_readme ... ok
+test smoke_shell_disallowed_command_fails ... ok
+test smoke_search_without_query_fails ... ok
+test smoke_read_without_path_fails ... ok
+test smoke_shell_git_status ... ok
+test smoke_shell_with_only_cwd_fails ... ok
+test smoke_shell_without_args_fails ... ok
+test smoke_search_text_pattern ... ok
+test smoke_tree_nonexistent_fails ... ok
+test smoke_tree_directory_fast ... ok
+test smoke_tree_current_directory ... ok
+test smoke_unknown_command_fails ... ok
+test smoke_version_command_fast ... ok
+test smoke_workflow_help_version ... ok
+test smoke_workflow_doctor_and_read ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests ctx_lite
+
+running 1 test
+test modules/ctx-lite/src/app/mod.rs - app::AppServices (line 11) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

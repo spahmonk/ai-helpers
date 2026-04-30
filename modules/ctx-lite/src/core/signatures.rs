@@ -3,10 +3,7 @@ use std::path::Path;
 
 /// Extract function/class/method signatures from code
 pub fn extract_signatures(content: &str, path: &Path) -> String {
-    let file_ext = path
-        .extension()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
+    let file_ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
     match file_ext {
         "rs" => extract_rust_signatures(content),
@@ -42,7 +39,7 @@ fn extract_rust_signatures(content: &str) -> String {
             || trimmed.starts_with("pub trait ")
             || trimmed.starts_with("trait ")
         {
-            sigs.push(format!("{}", trimmed.split('{').next().unwrap_or(trimmed).trim()));
+            sigs.push(trimmed.split('{').next().unwrap_or(trimmed).trim().to_string());
         } else if trimmed.starts_with("impl ") {
             if let Some(impl_part) = trimmed.split('{').next() {
                 sigs.push(impl_part.to_string());
@@ -160,16 +157,14 @@ fn extract_cpp_signatures(content: &str) -> String {
     for line in content.lines() {
         let trimmed = line.trim();
         // Look for function declarations and class definitions
-        if (trimmed.contains('(') && trimmed.contains(')'))
+        if ((trimmed.contains('(') && trimmed.contains(')'))
             || trimmed.starts_with("class ")
-            || trimmed.starts_with("struct ")
-        {
-            if !trimmed.starts_with("//") {
+            || trimmed.starts_with("struct "))
+            && !trimmed.starts_with("//") {
                 if let Some(sig) = trimmed.split('{').next() {
                     sigs.push(sig.trim().to_string());
                 }
             }
-        }
     }
 
     if sigs.is_empty() {
@@ -182,7 +177,6 @@ fn extract_cpp_signatures(content: &str) -> String {
 fn extract_c_signatures(content: &str) -> String {
     extract_cpp_signatures(content)
 }
-
 
 #[cfg(test)]
 mod tests {

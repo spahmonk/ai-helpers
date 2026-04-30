@@ -44,6 +44,7 @@ impl FileReader {
                 let original_len = content.len();
                 content = signatures::extract_signatures(&content, path.path());
                 let compressed_len = content.len();
+                #[allow(clippy::manual_checked_ops)]
                 if original_len > 0 {
                     ((original_len - compressed_len) * 100) / original_len
                 } else {

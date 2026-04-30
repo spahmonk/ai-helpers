@@ -233,20 +233,33 @@ where
             .and_then(|v| v.as_u64())
             .map(|v| v as usize);
 
-        let request = ReadRequest { path, max_bytes };
-        let normalized = request
-            .normalize(&self.config)
-            .map_err(|e| e.reason)?;
-        let response = self
-            .read
-            .read(normalized)
-            .map_err(|e| e.message)?;
+        let mode =
+            arguments
+                .get("mode")
+                .and_then(|v| v.as_str())
+                .and_then(|mode_str| match mode_str {
+                    "full" => Some(crate::app::contracts::ReadMode::Full),
+                    "signatures" => Some(crate::app::contracts::ReadMode::Signatures),
+                    "map" => Some(crate::app::contracts::ReadMode::Map),
+                    "diff" => Some(crate::app::contracts::ReadMode::Diff),
+                    _ => None,
+                });
+
+        let request = ReadRequest {
+            path,
+            max_bytes,
+            mode,
+        };
+        let normalized = request.normalize(&self.config).map_err(|e| e.reason)?;
+        let response = self.read.read(normalized).map_err(|e| e.message)?;
 
         Ok(json!({
             "jsonrpc": "2.0",
             "result": {
                 "content": response.content,
-                "truncated": response.truncated
+                "truncated": response.truncated,
+                "mode": format!("{:?}", response.mode).to_lowercase(),
+                "compression_percent": response.compression_percent
             }
         }))
     }
@@ -273,13 +286,8 @@ where
             max_depth,
             include_hidden,
         };
-        let normalized = request
-            .normalize(&self.config)
-            .map_err(|e| e.reason)?;
-        let response = self
-            .tree
-            .tree(normalized)
-            .map_err(|e| e.message)?;
+        let normalized = request.normalize(&self.config).map_err(|e| e.reason)?;
+        let response = self.tree.tree(normalized).map_err(|e| e.message)?;
 
         let entries: Vec<Value> = response
             .entries
@@ -316,10 +324,7 @@ where
 
         let request = SearchRequest { query, limit };
         let normalized = request.normalize(&self.config);
-        let response = self
-            .search
-            .search(normalized)
-            .map_err(|e| e.message)?;
+        let response = self.search.search(normalized).map_err(|e| e.message)?;
 
         let hits: Vec<Value> = response
             .hits
@@ -355,13 +360,8 @@ where
             .map(|s| s.to_string());
 
         let request = ShellRequest { command, cwd };
-        let normalized = request
-            .normalize(&self.config)
-            .map_err(|e| e.reason)?;
-        let response = self
-            .shell
-            .shell(normalized)
-            .map_err(|e| e.message)?;
+        let normalized = request.normalize(&self.config).map_err(|e| e.reason)?;
+        let response = self.shell.shell(normalized).map_err(|e| e.message)?;
 
         Ok(json!({
             "jsonrpc": "2.0",
@@ -390,10 +390,7 @@ where
             include_shell_policy,
         };
 
-        let response = self
-            .doctor
-            .doctor(request)
-            .map_err(|e| e.message)?;
+        let response = self.doctor.doctor(request).map_err(|e| e.message)?;
 
         let checks: Vec<Value> = response
             .checks
@@ -419,6 +416,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::contracts::ReadMode;
     use serde_json::json;
 
     // Mock service implementations for testing
@@ -426,13 +424,16 @@ mod tests {
     impl ReadService for MockReadService {
         fn read(
             &self,
-            _request: crate::app::contracts::ReadRequestNormalized,
-        ) -> Result<crate::app::contracts::ReadResponse, crate::app::contracts::ServiceError> {
+            request: crate::app::contracts::ReadRequestNormalized,
+        ) -> Result<crate::app::contracts::ReadResponse, crate::app::contracts::ServiceError>
+        {
             Ok(crate::app::contracts::ReadResponse {
                 path: std::path::PathBuf::from("/test/file.txt"),
                 content: "test content".to_string(),
                 bytes_read: 12,
                 truncated: false,
+                mode: request.mode,
+                compression_percent: 0,
             })
         }
     }
@@ -442,7 +443,8 @@ mod tests {
         fn tree(
             &self,
             request: crate::app::contracts::TreeRequestNormalized,
-        ) -> Result<crate::app::contracts::TreeResponse, crate::app::contracts::ServiceError> {
+        ) -> Result<crate::app::contracts::TreeResponse, crate::app::contracts::ServiceError>
+        {
             Ok(crate::app::contracts::TreeResponse {
                 root: request.path,
                 entries: vec![],
@@ -455,7 +457,8 @@ mod tests {
         fn search(
             &self,
             request: crate::app::contracts::SearchRequestNormalized,
-        ) -> Result<crate::app::contracts::SearchResponse, crate::app::contracts::ServiceError> {
+        ) -> Result<crate::app::contracts::SearchResponse, crate::app::contracts::ServiceError>
+        {
             Ok(crate::app::contracts::SearchResponse {
                 query: request.query,
                 hits: vec![],
@@ -468,7 +471,8 @@ mod tests {
         fn shell(
             &self,
             request: crate::app::contracts::ShellRequestNormalized,
-        ) -> Result<crate::app::contracts::ShellResponse, crate::app::contracts::ServiceError> {
+        ) -> Result<crate::app::contracts::ShellResponse, crate::app::contracts::ServiceError>
+        {
             Ok(crate::app::contracts::ShellResponse {
                 command: request.command.rendered(),
                 stdout: "shell output".to_string(),
@@ -483,7 +487,8 @@ mod tests {
         fn doctor(
             &self,
             _request: DoctorRequest,
-        ) -> Result<crate::app::contracts::DoctorResponse, crate::app::contracts::ServiceError> {
+        ) -> Result<crate::app::contracts::DoctorResponse, crate::app::contracts::ServiceError>
+        {
             Ok(crate::app::contracts::DoctorResponse {
                 checks: vec![crate::app::contracts::DoctorCheck {
                     name: "test_check".to_string(),
@@ -673,6 +678,32 @@ mod tests {
         let result = response.get("result").unwrap();
         assert!(result.get("content").is_some());
         assert!(result.get("truncated").is_some());
+        assert!(result.get("mode").is_some());
+        assert!(result.get("compression_percent").is_some());
+    }
+
+    #[test]
+    fn test_read_tool_with_mode_parameter() {
+        let adapter = create_adapter();
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "read",
+                "arguments": {
+                    "path": ".",
+                    "mode": "signatures"
+                }
+            }
+        });
+
+        let response = adapter.handle_request(&request).unwrap();
+        assert!(response.get("result").is_some());
+        let result = response.get("result").unwrap();
+        assert!(result.get("mode").is_some());
+        assert_eq!(result.get("mode").unwrap().as_str(), Some("signatures"));
+        assert!(result.get("compression_percent").is_some());
     }
 
     #[test]

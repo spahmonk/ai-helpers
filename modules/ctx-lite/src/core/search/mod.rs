@@ -141,7 +141,10 @@ impl SearchService {
 }
 
 /// Read file content up to a size limit, ensuring UTF-8 validity
-fn read_utf8_prefix(file: &mut dyn Read, max_bytes: usize) -> Result<(String, usize), ServiceError> {
+fn read_utf8_prefix(
+    file: &mut dyn Read,
+    max_bytes: usize,
+) -> Result<(String, usize), ServiceError> {
     let mut buf = vec![0u8; max_bytes];
     let bytes_read = file
         .read(&mut buf)
@@ -165,10 +168,10 @@ fn read_utf8_prefix(file: &mut dyn Read, max_bytes: usize) -> Result<(String, us
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::config::AppConfig;
     use std::fs::File;
     use std::io::Write;
     use tempfile::TempDir;
-    use crate::core::config::AppConfig;
 
     fn setup_test_dir() -> (TempDir, PathBuf) {
         let temp = TempDir::new().expect("failed to create temp dir");

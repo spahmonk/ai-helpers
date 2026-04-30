@@ -10,16 +10,26 @@ pub struct ContractError {
     pub reason: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReadMode {
+    Full,
+    Signatures,
+    Map,
+    Diff,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReadRequest {
     pub path: String,
     pub max_bytes: Option<usize>,
+    pub mode: Option<ReadMode>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReadRequestNormalized {
     pub path: PathBuf,
     pub max_bytes: usize,
+    pub mode: ReadMode,
 }
 
 impl ReadRequest {
@@ -30,6 +40,7 @@ impl ReadRequest {
                 .max_bytes
                 .unwrap_or(config.max_read_bytes)
                 .min(config.max_read_bytes),
+            mode: self.mode.unwrap_or(ReadMode::Full),
         })
     }
 }
@@ -40,6 +51,8 @@ pub struct ReadResponse {
     pub content: String,
     pub bytes_read: usize,
     pub truncated: bool,
+    pub mode: ReadMode,
+    pub compression_percent: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -433,7 +446,7 @@ fn path_is_within_root(path: &Path, root: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        DoctorCheck, DoctorRequest, DoctorResponse, DoctorService, ReadRequest,
+        DoctorCheck, DoctorRequest, DoctorResponse, DoctorService, ReadMode, ReadRequest,
         ReadRequestNormalized, ReadResponse, ReadService, SearchRequest, SearchRequestNormalized,
         SearchResponse, SearchService, ServiceError, ServiceErrorKind, ShellRequest,
         ShellRequestNormalized, ShellResponse, ShellService, TreeEntry, TreeRequest,
@@ -455,6 +468,7 @@ mod tests {
         let read = ReadRequest {
             path: "  ./docs/../README.md  ".into(),
             max_bytes: Some(512),
+            mode: None,
         }
         .normalize(&config)
         .expect("read request should normalize");
@@ -484,6 +498,7 @@ mod tests {
         let read_error = ReadRequest {
             path: " ../../etc/passwd ".into(),
             max_bytes: None,
+            mode: None,
         }
         .normalize(&config)
         .expect_err("read request should reject paths outside the lexical root");
@@ -791,6 +806,7 @@ mod tests {
         let read = ReadRequest {
             path: "src/./lib.rs".into(),
             max_bytes: None,
+            mode: None,
         }
         .normalize(&config)
         .expect("relative allowed root should be resolved from project root");
@@ -868,6 +884,7 @@ mod tests {
             .read(ReadRequestNormalized {
                 path: PathBuf::from("workspace/file.txt"),
                 max_bytes: 64,
+                mode: ReadMode::Full,
             })
             .expect_err("read service should surface runtime errors");
         assert_eq!(error.kind, ServiceErrorKind::Internal);
@@ -886,6 +903,7 @@ mod tests {
         let read = ReadRequest {
             path: r" C:\repo\src\..\lib.rs ".into(),
             max_bytes: None,
+            mode: None,
         }
         .normalize(&config)
         .expect("windows absolute path should keep its drive prefix");

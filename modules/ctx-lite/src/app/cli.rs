@@ -92,9 +92,50 @@ where
             };
         }
 
+        // Parse --mode flag if present
+        let (path, mode) = if args.len() >= 3 && args[0] == "--mode" {
+            // Format: read --mode <mode> <path>
+            let mode_str = &args[1];
+            let path = args[2].clone();
+            let mode = match mode_str.as_str() {
+                "full" => Some(crate::app::contracts::ReadMode::Full),
+                "signatures" => Some(crate::app::contracts::ReadMode::Signatures),
+                "map" => Some(crate::app::contracts::ReadMode::Map),
+                "diff" => Some(crate::app::contracts::ReadMode::Diff),
+                _ => {
+                    return CliResult {
+                        output: format!("Error: invalid mode '{}'. Valid options: full, signatures, map, diff\n", mode_str),
+                        exit_code: 1,
+                    };
+                }
+            };
+            (path, mode)
+        } else if args.len() >= 2 && args[args.len() - 2] == "--mode" {
+            // Format: read <path> --mode <mode>
+            let path = args[0].clone();
+            let mode_str = &args[args.len() - 1];
+            let mode = match mode_str.as_str() {
+                "full" => Some(crate::app::contracts::ReadMode::Full),
+                "signatures" => Some(crate::app::contracts::ReadMode::Signatures),
+                "map" => Some(crate::app::contracts::ReadMode::Map),
+                "diff" => Some(crate::app::contracts::ReadMode::Diff),
+                _ => {
+                    return CliResult {
+                        output: format!("Error: invalid mode '{}'. Valid options: full, signatures, map, diff\n", mode_str),
+                        exit_code: 1,
+                    };
+                }
+            };
+            (path, mode)
+        } else {
+            // No mode flag, use default
+            (args[0].clone(), None)
+        };
+
         let request = ReadRequest {
-            path: args[0].clone(),
+            path,
             max_bytes: None,
+            mode,
         };
 
         match request.normalize(&self.config) {
@@ -116,7 +157,11 @@ where
     }
 
     fn handle_tree(&self, args: &[String]) -> CliResult {
-        let path = if args.is_empty() { None } else { Some(args[0].clone()) };
+        let path = if args.is_empty() {
+            None
+        } else {
+            Some(args[0].clone())
+        };
 
         let request = TreeRequest {
             path: path.unwrap_or_default(),
@@ -153,7 +198,8 @@ where
         let query_start = if args[0] == "--mode" {
             if args.len() < 3 {
                 return CliResult {
-                    output: "Error: search with --mode requires a mode and query argument\n".to_string(),
+                    output: "Error: search with --mode requires a mode and query argument\n"
+                        .to_string(),
                     exit_code: 1,
                 };
             }
@@ -241,9 +287,17 @@ fn help_text() -> String {
 }
 
 fn format_read_response(response: &crate::app::contracts::ReadResponse) -> String {
+    let mode_str = format!("{:?}", response.mode);
+    let compression_str = if response.compression_percent > 0 {
+        format!(" ({}% compression)", response.compression_percent)
+    } else {
+        String::new()
+    };
     format!(
-        "{}\n{}",
+        "File: {}\nMode: {}{}\n\n{}\n",
         response.path.display(),
+        mode_str,
+        compression_str,
         response.content
     )
 }
@@ -277,7 +331,10 @@ fn format_search_response(response: &crate::app::contracts::SearchResponse) -> S
 }
 
 fn format_shell_response(response: &crate::app::contracts::ShellResponse) -> String {
-    format!("$ {}\n{}{}", response.command, response.stdout, response.stderr)
+    format!(
+        "$ {}\n{}{}",
+        response.command, response.stdout, response.stderr
+    )
 }
 
 fn format_doctor_response(response: &crate::app::contracts::DoctorResponse) -> String {
@@ -297,8 +354,8 @@ fn format_doctor_response(response: &crate::app::contracts::DoctorResponse) -> S
 mod tests {
     use super::*;
     use crate::app::contracts::{
-        DoctorCheck, DoctorResponse, ReadResponse, SearchHit, SearchResponse, ServiceError,
-        ShellResponse, TreeEntry, TreeResponse,
+        DoctorCheck, DoctorResponse, ReadMode, ReadResponse, SearchHit, SearchResponse,
+        ServiceError, ShellResponse, TreeEntry, TreeResponse,
     };
     use std::path::PathBuf;
 
@@ -314,6 +371,8 @@ mod tests {
                 content: "test content".to_string(),
                 bytes_read: 12,
                 truncated: false,
+                mode: ReadMode::Full,
+                compression_percent: 0,
             })
         }
     }
