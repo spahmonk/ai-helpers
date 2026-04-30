@@ -331,12 +331,12 @@ impl FixtureRepo {
             .join("tests")
             .join("runtime")
             .join(format!("{}-{}-{}", name, std::process::id(), fixture_id));
-        
+
         // Canonicalize root to handle Windows path variations
         if let Ok(canonical_root) = root.canonicalize() {
             root = canonical_root;
         }
-        
+
         let repo_root = root.join("repo");
         let outside_root = root.join("outside");
 
