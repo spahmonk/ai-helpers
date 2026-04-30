@@ -376,9 +376,14 @@ impl FixtureRepo {
     }
 
     fn config(&self) -> AppConfig {
+        // Canonicalize paths to handle Windows path variations
+        let project_root = self
+            .repo_root
+            .canonicalize()
+            .unwrap_or_else(|_| self.repo_root.clone());
         AppConfig {
-            project_root: self.repo_root.clone(),
-            allowed_roots: vec![self.repo_root.clone()],
+            project_root: project_root.clone(),
+            allowed_roots: vec![project_root],
             ..AppConfig::default()
         }
     }
