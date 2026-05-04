@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::core::capabilities::ShellCapabilityId;
 use crate::core::config::AppConfig;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -51,6 +52,8 @@ impl DoctorService {
             max_severity = CheckSeverity::Warning;
         }
         checks.push(check);
+
+        checks.push(Self::check_effective_shell_policy(config));
 
         DoctorReport {
             checks,
@@ -126,6 +129,68 @@ impl DoctorService {
                 ),
             }
         }
+    }
+
+    fn check_effective_shell_policy(config: &AppConfig) -> DoctorCheck {
+        let shell_enabled = config.shell_enabled;
+
+        match config.resolve_shell_policy() {
+            Ok(policy) => {
+                let active_ids: Vec<&str> = policy
+                    .active_capabilities
+                    .iter()
+                    .map(|c| c.as_str())
+                    .collect();
+                let denied_ids: Vec<&str> = policy
+                    .denied_capabilities
+                    .iter()
+                    .map(|c| c.as_str())
+                    .collect();
+
+                let mut parts = vec![
+                    format!("shell_enabled={shell_enabled}"),
+                    format!("profile={}", policy.active_profile.as_str()),
+                    format!("active=[{}]", active_ids.join(", ")),
+                ];
+                if !denied_ids.is_empty() {
+                    parts.push(format!("denied=[{}]", denied_ids.join(", ")));
+                }
+                if !config.shell_policy.allowlist_additions.is_empty() {
+                    parts.push(format!(
+                        "custom_patterns=[{}]",
+                        config.shell_policy.allowlist_additions.join(", ")
+                    ));
+                }
+
+                DoctorCheck {
+                    name: "shell_effective_policy".to_string(),
+                    severity: CheckSeverity::Ok,
+                    message: parts.join("; "),
+                }
+            }
+            Err(error) => DoctorCheck {
+                name: "shell_effective_policy".to_string(),
+                severity: CheckSeverity::Error,
+                message: format!(
+                    "shell_enabled={shell_enabled}; policy resolve error: {error}"
+                ),
+            },
+        }
+    }
+
+    /// Derives a summary of active capability IDs matched from a raw allowlist.
+    /// Used when running in legacy/backward-compatible mode (no explicit capability policy).
+    pub fn infer_capabilities_from_allowlist(allowlist: &[String]) -> Vec<ShellCapabilityId> {
+        use crate::core::capabilities::ORDERED_SHELL_CAPABILITIES;
+        ORDERED_SHELL_CAPABILITIES
+            .iter()
+            .copied()
+            .filter(|cap| {
+                cap.allowlist_patterns()
+                    .iter()
+                    .any(|pattern| allowlist.iter().any(|entry| entry.contains(pattern.trim_end_matches(" ..."))))
+            })
+            .collect()
     }
 }
 
@@ -303,5 +368,96 @@ mod tests {
         let report = DoctorService::run(&config);
 
         assert_eq!(report.overall_severity, CheckSeverity::Error);
+    }
+
+    #[test]
+    fn doctor_reports_effective_shell_policy_check() {
+        let config = AppConfig::default();
+
+        let report = DoctorService::run(&config);
+
+        let policy_check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "shell_effective_policy")
+            .expect("report should include shell_effective_policy check");
+        assert_eq!(policy_check.severity, CheckSeverity::Ok);
+        assert!(policy_check.message.contains("profile=safe"));
+        assert!(policy_check.message.contains("shell_enabled=false"));
+        assert!(policy_check.message.contains("active=["));
+    }
+
+    #[test]
+    fn doctor_effective_policy_includes_active_capability_ids() {
+        use crate::core::capabilities::{ShellCapabilityProfile, ShellPolicyInputs};
+        let config = AppConfig {
+            shell_enabled: true,
+            shell_policy: ShellPolicyInputs {
+                profile: ShellCapabilityProfile::Balanced,
+                explicit_policy: true,
+                ..ShellPolicyInputs::default()
+            },
+            ..AppConfig::default()
+        };
+
+        let report = DoctorService::run(&config);
+
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "shell_effective_policy")
+            .unwrap();
+        assert!(check.message.contains("profile=balanced"));
+        assert!(check.message.contains("shell_enabled=true"));
+        assert!(check.message.contains("git.inspect"));
+        assert!(check.message.contains("npm.build"));
+    }
+
+    #[test]
+    fn doctor_effective_policy_reports_denied_capabilities() {
+        use crate::core::capabilities::{ShellCapabilityProfile, ShellPolicyInputs};
+        let config = AppConfig {
+            shell_enabled: true,
+            shell_policy: ShellPolicyInputs {
+                profile: ShellCapabilityProfile::Balanced,
+                deny_capabilities: vec!["docker.logs".to_string()],
+                explicit_policy: true,
+                ..ShellPolicyInputs::default()
+            },
+            ..AppConfig::default()
+        };
+
+        let report = DoctorService::run(&config);
+
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "shell_effective_policy")
+            .unwrap();
+        assert!(check.message.contains("denied=[docker.logs]"));
+    }
+
+    #[test]
+    fn doctor_effective_policy_reports_custom_allowlist_patterns() {
+        use crate::core::capabilities::{ShellCapabilityProfile, ShellPolicyInputs};
+        let config = AppConfig {
+            shell_enabled: true,
+            shell_policy: ShellPolicyInputs {
+                profile: ShellCapabilityProfile::Safe,
+                allowlist_additions: vec!["echo hello".to_string()],
+                explicit_policy: true,
+                ..ShellPolicyInputs::default()
+            },
+            ..AppConfig::default()
+        };
+
+        let report = DoctorService::run(&config);
+
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "shell_effective_policy")
+            .unwrap();
+        assert!(check.message.contains("custom_patterns=[echo hello]"));
     }
 }

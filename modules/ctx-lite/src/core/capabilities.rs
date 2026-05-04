@@ -89,7 +89,7 @@ impl ShellCapabilityId {
         }
     }
 
-    fn allowlist_patterns(self) -> &'static [&'static str] {
+    pub fn allowlist_patterns(self) -> &'static [&'static str] {
         match self {
             Self::GitInspect => &[
                 "git rev-parse --show-toplevel",

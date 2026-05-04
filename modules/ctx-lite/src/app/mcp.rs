@@ -1,11 +1,17 @@
 use serde_json::{json, Value};
-use std::io::{self, Read, Write};
+use std::io::{self, BufRead, BufReader, Write};
 
 use crate::app::contracts::{
     DoctorRequest, DoctorService, ReadRequest, ReadService, SearchRequest, SearchService,
     ShellRequest, ShellService, TreeRequest, TreeService,
 };
+use crate::core::capabilities::ShellCapabilityId;
 use crate::core::config::AppConfig;
+
+enum MessageFormat {
+    ContentLength,
+    JsonLine,
+}
 
 pub struct McpAdapter<Read, Tree, Search, Shell, Doctor>
 where
@@ -50,19 +56,21 @@ where
     }
 
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut buffer = String::new();
-        io::stdin().read_to_string(&mut buffer)?;
+        let stdin = io::stdin();
+        let stdout = io::stdout();
+        let mut reader = BufReader::new(stdin.lock());
+        let mut writer = stdout.lock();
 
-        if buffer.trim().is_empty() {
-            return Ok(());
+        while let Some((request, format)) = Self::read_message(&mut reader)? {
+            if request.get("id").is_none() {
+                continue;
+            }
+
+            let response = self.handle_request(&request)?;
+            Self::write_message(&mut writer, &response, format)?;
         }
 
-        let request: Value = serde_json::from_str(&buffer)?;
-        let response = self.handle_request(&request)?;
-        let output = serde_json::to_string(&response)?;
-        io::stdout().write_all(output.as_bytes())?;
-        io::stdout().flush()?;
-
+        writer.flush()?;
         Ok(())
     }
 
@@ -72,19 +80,127 @@ where
             .and_then(|v| v.as_str())
             .ok_or("Missing method")?;
 
-        match method {
-            "initialize" => self.handle_initialize(),
+        let mut response = match method {
+            "initialize" => self.handle_initialize(request),
             "tools/list" => self.handle_list_tools(),
             "tools/call" => self.handle_call_tool(request),
             _ => Err("Unknown method".into()),
+        }?;
+
+        if let (Some(id), Some(object)) = (request.get("id"), response.as_object_mut()) {
+            object.insert("id".to_string(), id.clone());
+        }
+
+        Ok(response)
+    }
+
+    fn read_message<R: BufRead>(
+        reader: &mut R,
+    ) -> Result<Option<(Value, MessageFormat)>, Box<dyn std::error::Error>> {
+        loop {
+            let mut first_line = String::new();
+            let bytes = reader.read_line(&mut first_line)?;
+
+            if bytes == 0 {
+                return Ok(None);
+            }
+
+            let trimmed = first_line.trim_end_matches(['\r', '\n']);
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            if trimmed.starts_with('{') {
+                return Ok(Some((
+                    serde_json::from_str(trimmed)?,
+                    MessageFormat::JsonLine,
+                )));
+            }
+
+            let mut content_length = None;
+            Self::capture_content_length(&first_line, &mut content_length)?;
+
+            loop {
+                let mut line = String::new();
+                let bytes = reader.read_line(&mut line)?;
+
+                if bytes == 0 {
+                    return Ok(None);
+                }
+
+                if line.trim_end_matches(['\r', '\n']).is_empty() {
+                    break;
+                }
+
+                Self::capture_content_length(&line, &mut content_length)?;
+            }
+
+            let content_length = content_length.ok_or("Missing Content-Length header")?;
+            let mut body = vec![0_u8; content_length];
+            reader.read_exact(&mut body)?;
+
+            return Ok(Some((
+                serde_json::from_slice(&body)?,
+                MessageFormat::ContentLength,
+            )));
         }
     }
 
-    fn handle_initialize(&self) -> Result<Value, Box<dyn std::error::Error>> {
+    fn capture_content_length(
+        line: &str,
+        content_length: &mut Option<usize>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some((name, value)) = line.split_once(':') {
+            if name.trim().eq_ignore_ascii_case("Content-Length") {
+                *content_length = Some(value.trim().parse::<usize>()?);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn write_message<W: Write>(
+        writer: &mut W,
+        response: &Value,
+        format: MessageFormat,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let body = serde_json::to_vec(response)?;
+        match format {
+            MessageFormat::ContentLength => {
+                write!(writer, "Content-Length: {}\r\n\r\n", body.len())?;
+                writer.write_all(&body)?;
+            }
+            MessageFormat::JsonLine => {
+                writer.write_all(&body)?;
+                writer.write_all(b"\n")?;
+            }
+        }
+        writer.flush()?;
+        Ok(())
+    }
+
+    fn text_content(text: String) -> Value {
+        json!([
+            {
+                "type": "text",
+                "text": text
+            }
+        ])
+    }
+
+    fn handle_initialize(&self, request: &Value) -> Result<Value, Box<dyn std::error::Error>> {
+        let protocol_version = request
+            .get("params")
+            .and_then(|params| params.get("protocolVersion"))
+            .and_then(|version| version.as_str())
+            .unwrap_or("2024-11-05");
+
+        let instructions = self.build_instructions();
+
         Ok(json!({
             "jsonrpc": "2.0",
             "result": {
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": protocol_version,
                 "capabilities": {
                     "tools": {}
                 },
@@ -92,12 +208,181 @@ where
                     "name": "ctx-lite-mcp",
                     "version": "0.1.0"
                 },
-                "instructions": "# ctx-lite: Fast Context Extraction for AI Coding\n\n## Overview\nctx-lite is a high-performance context extractor and compression tool optimized for AI coding assistants. Use these tools to efficiently gather and analyze code context.\n\n## Best Practices\n\n### 1. **search** - Find code quickly\n- Use FIRST to locate relevant files and code patterns\n- Search for: function names, error messages, patterns, variable names\n- Efficient: searches in parallel, returns line numbers\n- Example: `search \"function handleRequest\"` before reading files\n\n### 2. **read** - Extract file contents\n- Use AFTER search to get file contents\n- Respects security boundaries (can't read outside allowed paths)\n- Automatically truncates large files\n- For large codebases: read multiple small files vs one huge file\n\n### 3. **tree** - Understand structure\n- Use to explore codebase organization\n- Shows directory structure with depth control\n- Fast way to find related files\n- Use max_depth=2-3 for large codebases\n\n### 4. **shell** - Execute commands\n- Use for git operations: `git log`, `git diff`, `git blame`\n- Use for build/test: `npm test`, `cargo test`\n- Whitelist-protected for security\n- Returns stdout, stderr, exit code\n\n### 5. **doctor** - Diagnose environment\n- Use to verify setup is correct\n- Checks: security policies, shell access, storage\n- Run when troubleshooting issues\n\n## Workflow Examples\n\n### Finding and fixing a bug:\n1. `search \"error message\"` - find the error\n2. `read \"path/to/file.rs\"` - examine the error location\n3. `search \"function name\"` - find related code\n4. `tree \".\"` - understand context\n5. `shell \". \" \"git diff\"` - see what changed\n\n### Understanding a feature:\n1. `search \"feature_name\"` - locate the feature\n2. `tree \"path/to/feature\"` - see structure\n3. `read` multiple related files\n4. `shell \". \" \"git log --oneline path/to/feature\"` - see history\n\n### Code review:\n1. `search \"modified pattern\"` - find changes\n2. `read` relevant files with context\n3. `shell \". \" \"git diff HEAD~1\"` - compare versions\n4. Analyze security, performance, correctness\n\n## Performance Tips\n\n- **search first**: Always search before reading to know what you need\n- **tree for structure**: Use tree to understand layout before diving in\n- **batch reads**: Read related files together to build context\n- **git for history**: Use shell + git to understand changes\n- **max_depth**: Limit tree depth for large codebases (2-3 levels)\n\n## Limitations\n\n- **Security**: Respects path jail - cannot read outside allowed directories\n- **Size**: Large files are automatically truncated (user-configurable)\n- **Whitelist**: Shell commands must be in whitelist (git, cargo, npm, python, etc.)\n- **Frequency**: Queries are fast but batching reduces overhead\n\n## When to Use What\n\n| Task | Tool | Why |\n|------|------|-----|\n| Find code | search | Fast parallel search |\n| Read file | read | Get exact content |\n| Explore dir | tree | Understand structure |\n| Git history | shell | Use `git log`, `git diff` |\n| Run tests | shell | Use `npm test`, `cargo test` |\n| Verify setup | doctor | Check configuration |\n\n## Pro Tips\n\n1. **Start with search**: Always begin with search to find relevant code\n2. **Use tree for orientation**: Before reading files, tree shows you what exists\n3. **Chain commands**: Use git shell commands to understand changes\n4. **Read strategically**: Read main files first, then implementations\n5. **Batch context**: Gather related context together for efficiency\n"
+                "instructions": instructions
             }
         }))
     }
 
+    fn build_instructions(&self) -> String {
+        let shell_section = if !self.config.shell_enabled {
+            "### 4. **shell** - Execute commands\n- Shell execution is disabled in this configuration\n- Use search, read, and tree for code exploration instead\n".to_string()
+        } else {
+            match self.config.resolve_shell_policy() {
+                Ok(policy) => {
+                    let caps = &policy.active_capabilities;
+                    let mut lines = vec![
+                        "### 4. **shell** - Execute whitelisted shell commands".to_string(),
+                        format!("- Active profile: **{}**", policy.active_profile.as_str()),
+                        "- Only explicitly allowed commands run; shell wrappers, redirects, and chaining remain blocked".to_string(),
+                    ];
+
+                    if caps.contains(&ShellCapabilityId::GitInspect) {
+                        lines.push("- Git inspection: `git status --short`, `git diff --stat`, `git log --oneline -n 20`, `git ls-files`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::DockerInspect) {
+                        lines.push("- Docker inspection: `docker ps`, `docker inspect <name>`, `docker compose config`, `docker version`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::DockerLogs) {
+                        lines.push("- Docker logs: `docker logs <name>`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::DockerComposePs) || caps.contains(&ShellCapabilityId::DockerComposeLogs) {
+                        lines.push("- Compose diagnostics: `docker compose ps`, `docker compose logs <svc>`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::NpmTest) {
+                        lines.push("- npm test: `npm test`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::NpmBuild) || caps.contains(&ShellCapabilityId::NpmLint) || caps.contains(&ShellCapabilityId::NpmTypecheck) {
+                        lines.push("- npm build/lint/typecheck: `npm run build`, `npm run lint`, `npm run typecheck`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::NpmInstall) {
+                        lines.push("- npm install: `npm install`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::CargoTest) {
+                        lines.push("- Cargo test: `cargo test <filter>`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::CargoBuild) || caps.contains(&ShellCapabilityId::CargoCheck) || caps.contains(&ShellCapabilityId::CargoClippy) || caps.contains(&ShellCapabilityId::CargoFmtCheck) {
+                        lines.push("- Cargo build/check/clippy/fmt: `cargo build`, `cargo check`, `cargo clippy --all-targets --all-features`, `cargo fmt --check`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::CargoRun) {
+                        lines.push("- Cargo run: `cargo run`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::PythonPytest) || caps.contains(&ShellCapabilityId::Python3Pytest) {
+                        lines.push("- Python tests: `python -m pytest <path>`, `python3 -m pytest <path>`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::RubyRspec) {
+                        lines.push("- Ruby/RSpec: `bundle exec rspec <path>`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::DockerRun) {
+                        lines.push("- Docker run: `docker run <image>`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::DockerBuild) {
+                        lines.push("- Docker build: `docker build <path>`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::DockerComposeUp) {
+                        lines.push("- Docker compose up: `docker compose up`".to_string());
+                    }
+                    if caps.contains(&ShellCapabilityId::DockerExec) {
+                        lines.push("- Docker exec: `docker exec <container> <cmd>`".to_string());
+                    }
+                    if !policy.allowlist_patterns.is_empty() {
+                        lines.push(format!("- Custom allowlist: {} additional pattern(s)", policy.allowlist_patterns.len()));
+                    }
+
+                    lines.join("\n")
+                }
+                Err(_) => {
+                    "### 4. **shell** - Execute whitelisted shell commands\n- Use for git inspection, docker diagnostics, and build/test workflows\n- Whitelist-protected for security\n- Returns stdout, stderr, exit code".to_string()
+                }
+            }
+        };
+
+        format!(
+            "# ctx-lite: Fast Context Extraction for AI Coding\n\n\
+             ## Overview\n\
+             ctx-lite is a high-performance context extractor and compression tool optimized for AI coding assistants. \
+             Use these tools to efficiently gather and analyze code context.\n\n\
+             ## Best Practices\n\n\
+             ### 1. **search** - Find code quickly\n\
+             - Use FIRST to locate relevant files and code patterns\n\
+             - Search for: function names, error messages, patterns, variable names\n\
+             - Efficient: searches in parallel, returns line numbers\n\
+             - Example: `search \"function handleRequest\"` before reading files\n\n\
+             ### 2. **read** - Extract file contents\n\
+             - Use AFTER search to get file contents\n\
+             - Respects security boundaries (can't read outside allowed paths)\n\
+             - Automatically truncates large files\n\
+             - For large codebases: read multiple small files vs one huge file\n\n\
+             ### 3. **tree** - Understand structure\n\
+             - Use to explore codebase organization\n\
+             - Shows directory structure with depth control\n\
+             - Fast way to find related files\n\
+             - Use max_depth=2-3 for large codebases\n\n\
+             {shell_section}\n\n\
+             ### 5. **doctor** - Diagnose environment\n\
+             - Use to verify setup is correct\n\
+             - Checks: security policies, shell access, storage\n\
+             - Run when troubleshooting issues\n\n\
+             ## Performance Tips\n\n\
+             - **search first**: Always search before reading to know what you need\n\
+             - **tree for structure**: Use tree to understand layout before diving in\n\
+             - **batch reads**: Read related files together to build context\n\
+             - **use shell selectively**: Prefer the smallest safe command that answers the question\n\
+             - **max_depth**: Limit tree depth for large codebases (2-3 levels)\n\n\
+             ## Limitations\n\n\
+             - **Security**: Respects path jail - cannot read outside allowed directories\n\
+             - **Size**: Large files are automatically truncated (user-configurable)\n\
+             - **Whitelist**: Shell commands must match the configured allowlist\n\
+             - **Frequency**: Queries are fast but batching reduces overhead\n"
+        )
+    }
+
+    fn effective_shell_tool_description(&self) -> String {
+        if !self.config.shell_enabled {
+            return "Execute shell commands - currently disabled in this configuration.".to_string();
+        }
+        match self.config.resolve_shell_policy() {
+            Ok(policy) => {
+                let caps = &policy.active_capabilities;
+                let mut classes = Vec::new();
+                if caps.contains(&ShellCapabilityId::GitInspect) {
+                    classes.push("safe git inspection");
+                }
+                if caps.contains(&ShellCapabilityId::DockerInspect) || caps.contains(&ShellCapabilityId::DockerLogs) {
+                    classes.push("docker diagnostics");
+                }
+                if caps.contains(&ShellCapabilityId::NpmTest) || caps.contains(&ShellCapabilityId::NpmBuild) || caps.contains(&ShellCapabilityId::NpmLint) {
+                    classes.push("npm build/test workflows");
+                }
+                if caps.contains(&ShellCapabilityId::NpmInstall) {
+                    classes.push("npm install");
+                }
+                if caps.contains(&ShellCapabilityId::CargoTest) || caps.contains(&ShellCapabilityId::CargoBuild) {
+                    classes.push("cargo build/test");
+                }
+                if caps.contains(&ShellCapabilityId::CargoRun) {
+                    classes.push("cargo run");
+                }
+                if caps.contains(&ShellCapabilityId::PythonPytest) || caps.contains(&ShellCapabilityId::Python3Pytest) {
+                    classes.push("python pytest");
+                }
+                if caps.contains(&ShellCapabilityId::RubyRspec) {
+                    classes.push("ruby/rspec");
+                }
+                if caps.contains(&ShellCapabilityId::DockerRun) || caps.contains(&ShellCapabilityId::DockerBuild) || caps.contains(&ShellCapabilityId::DockerComposeUp) {
+                    classes.push("docker run/build/compose");
+                }
+
+                if classes.is_empty() {
+                    format!(
+                        "Execute whitelisted shell commands - profile: {}. Whitelist-protected for security.",
+                        policy.active_profile.as_str()
+                    )
+                } else {
+                    format!(
+                        "Execute whitelisted shell commands - profile: {}. Active command classes: {}. Whitelist-protected; shell wrappers, redirects, and chaining are blocked.",
+                        policy.active_profile.as_str(),
+                        classes.join(", ")
+                    )
+                }
+            }
+            Err(_) => {
+                "Execute whitelisted shell commands - Use for git, docker, npm, cargo, python, and ruby workflows. Whitelist-protected for security.".to_string()
+            }
+        }
+    }
+
     fn handle_list_tools(&self) -> Result<Value, Box<dyn std::error::Error>> {
+        let shell_desc = self.effective_shell_tool_description();
         Ok(json!({
             "jsonrpc": "2.0",
             "result": {
@@ -162,13 +447,13 @@ where
                     },
                     {
                         "name": "shell",
-                        "description": "Execute shell commands - Use for git operations (git log, git diff, git blame) and build commands (npm test, cargo test). Whitelist-protected.",
+                        "description": shell_desc,
                         "inputSchema": {
                             "type": "object",
                             "properties": {
                                 "command": {
                                     "type": "string",
-                                    "description": "Command to execute - supports: git, npm, cargo, python, ruby, etc"
+                                    "description": "Command to execute - must match the configured allowlist"
                                 },
                                 "cwd": {
                                     "type": "string",
@@ -241,7 +526,7 @@ where
         Ok(json!({
             "jsonrpc": "2.0",
             "result": {
-                "content": response.content,
+                "content": Self::text_content(response.content.clone()),
                 "truncated": response.truncated
             }
         }))
@@ -287,6 +572,12 @@ where
         Ok(json!({
             "jsonrpc": "2.0",
             "result": {
+                "content": Self::text_content(
+                    serde_json::to_string(&json!({
+                        "root": response.root.to_string_lossy(),
+                        "entries": entries,
+                    }))?
+                ),
                 "root": response.root.to_string_lossy(),
                 "entries": entries
             }
@@ -324,6 +615,12 @@ where
         Ok(json!({
             "jsonrpc": "2.0",
             "result": {
+                "content": Self::text_content(
+                    serde_json::to_string(&json!({
+                        "query": response.query,
+                        "hits": hits,
+                    }))?
+                ),
                 "query": response.query,
                 "hits": hits
             }
@@ -349,6 +646,14 @@ where
         Ok(json!({
             "jsonrpc": "2.0",
             "result": {
+                "content": Self::text_content(
+                    serde_json::to_string(&json!({
+                        "command": response.command,
+                        "stdout": response.stdout,
+                        "stderr": response.stderr,
+                        "exit_code": response.exit_code,
+                    }))?
+                ),
                 "command": response.command,
                 "stdout": response.stdout,
                 "stderr": response.stderr,
@@ -390,6 +695,11 @@ where
         Ok(json!({
             "jsonrpc": "2.0",
             "result": {
+                "content": Self::text_content(
+                    serde_json::to_string(&json!({
+                        "checks": checks,
+                    }))?
+                ),
                 "checks": checks
             }
         }))
@@ -893,5 +1203,147 @@ mod tests {
 
         let result = adapter.handle_request(&request);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_initialize_response_echoes_request_id() {
+        let adapter = create_adapter();
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 42,
+            "method": "initialize"
+        });
+
+        let response = adapter.handle_request(&request).unwrap();
+        assert_eq!(response.get("id"), Some(&json!(42)));
+    }
+
+    #[test]
+    fn test_initialize_response_uses_client_protocol_version() {
+        let adapter = create_adapter();
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 43,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-11-25"
+            }
+        });
+
+        let response = adapter.handle_request(&request).unwrap();
+        assert_eq!(
+            response
+                .get("result")
+                .and_then(|result| result.get("protocolVersion")),
+            Some(&json!("2025-11-25"))
+        );
+    }
+
+    #[test]
+    fn test_read_tool_returns_mcp_content_blocks() {
+        let adapter = create_adapter();
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 17,
+            "method": "tools/call",
+            "params": {
+                "name": "read",
+                "arguments": {
+                    "path": "."
+                }
+            }
+        });
+
+        let response = adapter.handle_request(&request).unwrap();
+        let blocks = response
+            .get("result")
+            .and_then(|result| result.get("content"))
+            .and_then(|content| content.as_array())
+            .expect("tool result should expose MCP content blocks");
+
+        assert_eq!(blocks[0].get("type"), Some(&json!("text")));
+        assert!(blocks[0]
+            .get("text")
+            .and_then(|text| text.as_str())
+            .unwrap_or_default()
+            .contains("test content"));
+    }
+
+    #[test]
+    fn test_instructions_omit_dangerous_commands_in_safe_profile() {
+        let adapter = create_adapter();
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 44,
+            "method": "initialize",
+            "params": {}
+        });
+
+        let response = adapter.handle_request(&request).unwrap();
+        let instructions = response
+            .get("result")
+            .and_then(|r| r.get("instructions"))
+            .and_then(|i| i.as_str())
+            .expect("instructions should be present");
+
+        assert!(!instructions.contains("docker run"), "safe profile should not mention docker run");
+        assert!(!instructions.contains("npm install"), "safe profile should not mention npm install");
+        assert!(!instructions.contains("cargo run"), "safe profile should not mention cargo run");
+        assert!(instructions.contains("git"), "safe profile should mention git");
+    }
+
+    #[test]
+    fn test_shell_tool_description_reflects_active_profile() {
+        let adapter = create_adapter();
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 45,
+            "method": "tools/list"
+        });
+
+        let response = adapter.handle_request(&request).unwrap();
+        let shell_tool = response
+            .get("result")
+            .and_then(|r| r.get("tools"))
+            .and_then(|t| t.as_array())
+            .and_then(|tools| tools.iter().find(|t| t.get("name") == Some(&json!("shell"))))
+            .expect("shell tool should be present");
+
+        let description = shell_tool
+            .get("description")
+            .and_then(|d| d.as_str())
+            .expect("shell tool description should be present");
+
+        assert!(description.contains("safe"), "shell description should mention the active profile");
+    }
+
+    #[test]
+    fn test_instructions_mention_docker_logs_when_docker_logs_enabled() {
+        use crate::core::capabilities::{ShellCapabilityProfile, ShellPolicyInputs};
+        let config = AppConfig {
+            shell_enabled: true,
+            shell_policy: ShellPolicyInputs {
+                profile: ShellCapabilityProfile::Safe,
+                explicit_policy: true,
+                ..ShellPolicyInputs::default()
+            },
+            ..AppConfig::default()
+        };
+        let adapter = McpAdapter::new(
+            config,
+            MockReadService,
+            MockTreeService,
+            MockSearchService,
+            MockShellService,
+            MockDoctorService,
+        );
+        let request = json!({ "jsonrpc": "2.0", "id": 46, "method": "initialize", "params": {} });
+        let response = adapter.handle_request(&request).unwrap();
+        let instructions = response
+            .get("result")
+            .and_then(|r| r.get("instructions"))
+            .and_then(|i| i.as_str())
+            .unwrap();
+        assert!(instructions.contains("docker logs"), "safe profile includes docker.logs capability");
     }
 }
