@@ -272,7 +272,7 @@ pub struct SetupResult {
 fn build_setup_policy_args(inputs: &ShellPolicyInputs) -> Vec<String> {
     let mut args = Vec::new();
 
-    if inputs.profile != ShellCapabilityProfile::Safe {
+    if inputs.explicit_policy || inputs.profile != ShellCapabilityProfile::Safe {
         args.push("--shell-profile".to_string());
         args.push(inputs.profile.as_str().to_string());
     }
@@ -334,6 +334,24 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn setup_policy_args_include_explicit_safe_profile() {
+        let args = build_setup_policy_args(&ShellPolicyInputs {
+            profile: ShellCapabilityProfile::Safe,
+            explicit_policy: true,
+            ..ShellPolicyInputs::default()
+        });
+
+        assert_eq!(args, vec!["--shell-profile", "safe"]);
+    }
+
+    #[test]
+    fn setup_policy_args_omit_default_implicit_safe_profile() {
+        let args = build_setup_policy_args(&ShellPolicyInputs::default());
+
+        assert!(args.is_empty());
+    }
+
+    #[test]
     fn setup_policy_args_are_deterministic_for_all_supported_flags() {
         let inputs = ShellPolicyInputs {
             profile: ShellCapabilityProfile::Balanced,
@@ -359,6 +377,20 @@ mod tests {
                 "--allow-command".to_string(),
                 "git show --stat".to_string(),
             ]
+        );
+    }
+
+    #[test]
+    fn claude_config_includes_explicit_safe_profile() {
+        let config = claude_ctx_lite_server_config(&ShellPolicyInputs {
+            profile: ShellCapabilityProfile::Safe,
+            explicit_policy: true,
+            ..ShellPolicyInputs::default()
+        });
+
+        assert_eq!(
+            config["args"],
+            json!(["-y", "@spahmonk/ctx-lite", "--mcp", "--shell-profile", "safe"])
         );
     }
 
@@ -396,6 +428,17 @@ mod tests {
     }
 
     #[test]
+    fn copilot_config_includes_explicit_safe_profile() {
+        let config = copilot_ctx_lite_server_config(&ShellPolicyInputs {
+            profile: ShellCapabilityProfile::Safe,
+            explicit_policy: true,
+            ..ShellPolicyInputs::default()
+        });
+
+        assert_eq!(config["args"], json!(["--shell-profile", "safe"]));
+    }
+
+    #[test]
     fn copilot_entry_includes_policy_args_when_provided() {
         let inputs = ShellPolicyInputs {
             profile: ShellCapabilityProfile::Safe,
@@ -414,6 +457,8 @@ mod tests {
         assert_eq!(
             args,
             &vec![
+                json!("--shell-profile"),
+                json!("safe"),
                 json!("--allow-capability"),
                 json!("npm.test"),
                 json!("--deny-capability"),
