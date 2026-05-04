@@ -53,7 +53,13 @@ impl DoctorService {
         }
         checks.push(check);
 
-        checks.push(Self::check_effective_shell_policy(config));
+        let check = Self::check_effective_shell_policy(config);
+        if check.severity == CheckSeverity::Error {
+            max_severity = CheckSeverity::Error;
+        } else if check.severity == CheckSeverity::Warning && max_severity != CheckSeverity::Error {
+            max_severity = CheckSeverity::Warning;
+        }
+        checks.push(check);
 
         DoctorReport {
             checks,
@@ -113,21 +119,22 @@ impl DoctorService {
     }
 
     fn check_shell_policy_presence(config: &AppConfig) -> DoctorCheck {
-        if config.shell_whitelist.is_empty() {
-            DoctorCheck {
+        match config.effective_shell_whitelist() {
+            Ok(allowlist) if allowlist.is_empty() => DoctorCheck {
                 name: "shell_policy_presence".to_string(),
                 severity: CheckSeverity::Warning,
                 message: "Shell whitelist is empty".to_string(),
-            }
-        } else {
-            DoctorCheck {
+            },
+            Ok(allowlist) => DoctorCheck {
                 name: "shell_policy_presence".to_string(),
                 severity: CheckSeverity::Ok,
-                message: format!(
-                    "Shell allowlist has {} entries",
-                    config.shell_whitelist.len()
-                ),
-            }
+                message: format!("Shell allowlist has {} entries", allowlist.len()),
+            },
+            Err(error) => DoctorCheck {
+                name: "shell_policy_presence".to_string(),
+                severity: CheckSeverity::Error,
+                message: format!("Failed to resolve effective shell allowlist: {error}"),
+            },
         }
     }
 
@@ -308,6 +315,37 @@ mod tests {
             .find(|c| c.name == "shell_policy_presence")
             .unwrap();
         assert_eq!(policy_check.severity, CheckSeverity::Warning);
+    }
+
+    #[test]
+    fn doctor_uses_effective_allowlist_when_policy_is_explicit() {
+        use crate::core::capabilities::{ShellCapabilityProfile, ShellPolicyInputs};
+
+        let config = AppConfig {
+            project_root: PathBuf::from("."),
+            allowed_roots: vec![PathBuf::from(".")],
+            shell_enabled: true,
+            shell_whitelist: vec![],
+            shell_policy: ShellPolicyInputs {
+                profile: ShellCapabilityProfile::Safe,
+                explicit_policy: true,
+                ..ShellPolicyInputs::default()
+            },
+            max_read_bytes: 1_048_576,
+            max_shell_output_bytes: 65_536,
+            memory_enabled: false,
+            redaction_enabled: true,
+        };
+
+        let report = DoctorService::run(&config);
+
+        let policy_check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "shell_policy_presence")
+            .unwrap();
+        assert_eq!(policy_check.severity, CheckSeverity::Ok);
+        assert!(policy_check.message.contains("Shell allowlist has"));
     }
 
     #[test]

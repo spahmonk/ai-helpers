@@ -279,7 +279,12 @@ pub fn resolve_shell_policy(
         active_capabilities.insert(capability);
     }
 
-    let denied_capabilities = parse_capabilities(&inputs.deny_capabilities, "deny_capabilities")?;
+    let requested_denials = parse_capabilities(&inputs.deny_capabilities, "deny_capabilities")?;
+    let denied_capabilities: Vec<ShellCapabilityId> = requested_denials
+        .iter()
+        .copied()
+        .filter(|capability| active_capabilities.contains(capability))
+        .collect();
     for capability in &denied_capabilities {
         active_capabilities.remove(capability);
     }

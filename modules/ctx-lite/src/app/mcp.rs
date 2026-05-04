@@ -66,7 +66,14 @@ where
                 continue;
             }
 
-            let response = self.handle_request(&request)?;
+            let response = match self.handle_request(&request) {
+                Ok(response) => response,
+                Err(error) => Self::error_response(
+                    request.get("id").cloned(),
+                    Self::error_code(&*error),
+                    error.to_string(),
+                ),
+            };
             Self::write_message(&mut writer, &response, format)?;
         }
 
@@ -188,6 +195,30 @@ where
         ])
     }
 
+    fn error_code(error: &dyn std::error::Error) -> i64 {
+        match error.to_string().as_str() {
+            "Unknown method" | "Unknown tool" => -32601,
+            "Missing method" | "Missing tool name" | "Missing arguments" => -32600,
+            _ => -32603,
+        }
+    }
+
+    fn error_response(id: Option<Value>, code: i64, message: String) -> Value {
+        let mut response = json!({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": code,
+                "message": message
+            }
+        });
+
+        if let (Some(id), Some(object)) = (id, response.as_object_mut()) {
+            object.insert("id".to_string(), id);
+        }
+
+        response
+    }
+
     fn handle_initialize(&self, request: &Value) -> Result<Value, Box<dyn std::error::Error>> {
         let protocol_version = request
             .get("params")
@@ -274,8 +305,11 @@ where
                     if caps.contains(&ShellCapabilityId::DockerExec) {
                         lines.push("- Docker exec: `docker exec <container> <cmd>`".to_string());
                     }
-                    if !policy.allowlist_patterns.is_empty() {
-                        lines.push(format!("- Custom allowlist: {} additional pattern(s)", policy.allowlist_patterns.len()));
+                    if !self.config.shell_policy.allowlist_additions.is_empty() {
+                        lines.push(format!(
+                            "- Custom patterns: {}",
+                            self.config.shell_policy.allowlist_additions.join(", ")
+                        ));
                     }
 
                     lines.join("\n")
@@ -1237,6 +1271,35 @@ mod tests {
                 .get("result")
                 .and_then(|result| result.get("protocolVersion")),
             Some(&json!("2025-11-25"))
+        );
+    }
+
+    #[test]
+    fn test_unknown_method_returns_json_rpc_error_response() {
+        let adapter = create_adapter();
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 99,
+            "method": "unknown/method"
+        });
+
+        let response = match adapter.handle_request(&request) {
+            Ok(response) => response,
+            Err(error) => McpAdapter::<
+                MockReadService,
+                MockTreeService,
+                MockSearchService,
+                MockShellService,
+                MockDoctorService,
+            >::error_response(
+                request.get("id").cloned(), -32601, error.to_string()
+            ),
+        };
+
+        assert_eq!(response.get("id"), Some(&json!(99)));
+        assert_eq!(
+            response.get("error").and_then(|error| error.get("code")),
+            Some(&json!(-32601))
         );
     }
 
