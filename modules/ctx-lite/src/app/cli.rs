@@ -35,6 +35,7 @@ pub fn parse_leading_process_args(args: &[String]) -> Result<LeadingProcessArgs,
                     .ok_or_else(|| "missing value for --shell-profile".to_string())?;
                 shell_policy.profile = ShellCapabilityProfile::parse(value)
                     .ok_or_else(|| format!("invalid shell profile `{value}`"))?;
+                shell_policy.explicit_policy = true;
                 index += 2;
             }
             "--allow-capability" => {
@@ -44,6 +45,7 @@ pub fn parse_leading_process_args(args: &[String]) -> Result<LeadingProcessArgs,
                 shell_policy
                     .allow_capabilities
                     .extend(parse_csv_list(value));
+                shell_policy.explicit_policy = true;
                 index += 2;
             }
             "--deny-capability" => {
@@ -51,6 +53,7 @@ pub fn parse_leading_process_args(args: &[String]) -> Result<LeadingProcessArgs,
                     .get(index + 1)
                     .ok_or_else(|| "missing value for --deny-capability".to_string())?;
                 shell_policy.deny_capabilities.extend(parse_csv_list(value));
+                shell_policy.explicit_policy = true;
                 index += 2;
             }
             "--allow-command" => {
@@ -62,6 +65,7 @@ pub fn parse_leading_process_args(args: &[String]) -> Result<LeadingProcessArgs,
                     return Err("missing value for --allow-command".to_string());
                 }
                 shell_policy.allowlist_additions.push(pattern.to_string());
+                shell_policy.explicit_policy = true;
                 index += 2;
             }
             _ => break,
@@ -770,6 +774,7 @@ mod tests {
         .expect("leading process args should parse");
 
         assert!(!parsed.run_mcp);
+        assert!(parsed.shell_policy.explicit_policy);
         assert_eq!(
             parsed.shell_policy.profile,
             ShellCapabilityProfile::Balanced
@@ -810,11 +815,25 @@ mod tests {
         .expect("leading process args should parse");
 
         assert!(parsed.run_mcp);
+        assert!(parsed.shell_policy.explicit_policy);
         assert!(parsed.passthrough_args.is_empty());
         assert_eq!(
             parsed.shell_policy.allowlist_additions,
             vec!["echo ok".to_string()]
         );
+    }
+
+    #[test]
+    fn parse_leading_process_args_keeps_explicit_flag_false_without_policy_flags() {
+        let parsed = parse_leading_process_args(&[
+            "--mcp".to_string(),
+            "doctor".to_string(),
+        ])
+        .expect("args without shell policy flags should parse");
+
+        assert!(parsed.run_mcp);
+        assert!(!parsed.shell_policy.explicit_policy);
+        assert_eq!(parsed.passthrough_args, vec!["doctor".to_string()]);
     }
 
     #[test]

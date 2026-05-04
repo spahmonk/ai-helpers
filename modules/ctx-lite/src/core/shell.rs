@@ -37,6 +37,28 @@ pub fn default_shell_allowlist() -> Vec<String> {
         "git ls-files",
         "git diff --stat",
         "git log --oneline -n 20",
+        "docker ps",
+        "docker compose ps",
+        "docker logs ...",
+        "docker compose logs ...",
+        "docker inspect ...",
+        "docker compose config",
+        "docker version",
+        "npm test",
+        "npm run build",
+        "npm run lint",
+        "npm run typecheck",
+        "cargo test ...",
+        "cargo build",
+        "cargo check",
+        "cargo fmt --check",
+        "cargo clippy --all-targets --all-features",
+        "python --version",
+        "python -m pytest ...",
+        "python3 --version",
+        "python3 -m pytest ...",
+        "ruby --version",
+        "bundle exec rspec ...",
     ]
     .into_iter()
     .map(str::to_string)
@@ -169,7 +191,12 @@ pub fn normalize_and_validate_command(
 
 fn allowlist_matches(entry: &str, candidate: &[String]) -> bool {
     tokenize(entry.trim())
-        .map(|allowed| allowed == candidate)
+        .map(|allowed| match allowed.split_last() {
+            Some((wildcard, prefix)) if wildcard == "..." => {
+                candidate.len() >= prefix.len() && prefix == &candidate[..prefix.len()]
+            }
+            _ => allowed == candidate,
+        })
         .unwrap_or(false)
 }
 
@@ -517,7 +544,10 @@ enum TokenState {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_safe_environment, normalize_and_validate_command, ShellExecutor};
+    use super::{
+        build_safe_environment, default_shell_allowlist, normalize_and_validate_command,
+        ShellExecutor,
+    };
     use crate::core::{config::AppConfig, security::path_jail::PathJail};
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -545,6 +575,34 @@ mod tests {
         assert_eq!(normalized.rendered(), "git rev-parse --show-toplevel");
         assert_eq!(normalized.program, "git");
         assert_eq!(normalized.args, vec!["rev-parse", "--show-toplevel"]);
+    }
+
+    #[test]
+    fn wildcard_allowlist_entries_accept_trailing_args() {
+        let normalized = normalize_and_validate_command(
+            "docker compose logs api",
+            &[String::from("docker compose logs ...")],
+        )
+        .expect("allowlist entries should support safe command prefixes with trailing args");
+
+        assert_eq!(normalized.program, "docker");
+        assert_eq!(normalized.args, vec!["compose", "logs", "api"]);
+    }
+
+    #[test]
+    fn default_allowlist_accepts_safe_dev_tooling_commands() {
+        for command in [
+            "docker logs ctx-lite",
+            "docker compose logs api",
+            "npm run build",
+            "cargo test mcp_server_accepts_json_line_requests",
+            "python -m pytest tests/mcp_stdio.rs",
+            "ruby --version",
+        ] {
+            normalize_and_validate_command(command, &default_shell_allowlist()).unwrap_or_else(
+                |error| panic!("{command:?} should be allowed by default: {}", error.reason),
+            );
+        }
     }
 
     #[test]

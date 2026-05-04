@@ -99,7 +99,12 @@ impl ShellCapabilityId {
                 "git diff --stat",
                 "git log --oneline -n 20",
             ],
-            Self::DockerInspect => &["docker ps", "docker inspect ...", "docker version"],
+            Self::DockerInspect => &[
+                "docker ps",
+                "docker inspect ...",
+                "docker compose config",
+                "docker version",
+            ],
             Self::DockerLogs => &["docker logs ..."],
             Self::DockerComposePs => &["docker compose ps"],
             Self::DockerComposeLogs => &["docker compose logs ..."],
@@ -112,8 +117,8 @@ impl ShellCapabilityId {
             Self::CargoCheck => &["cargo check"],
             Self::CargoFmtCheck => &["cargo fmt --check"],
             Self::CargoClippy => &["cargo clippy --all-targets --all-features"],
-            Self::PythonPytest => &["python -m pytest ..."],
-            Self::Python3Pytest => &["python3 -m pytest ..."],
+            Self::PythonPytest => &["python --version", "python -m pytest ..."],
+            Self::Python3Pytest => &["python3 --version", "python3 -m pytest ..."],
             Self::RubyVersion => &["ruby --version"],
             Self::RubyRspec => &["bundle exec rspec ..."],
             Self::DockerRun => &["docker run ..."],
@@ -224,6 +229,7 @@ pub struct ShellPolicyInputs {
     pub allow_capabilities: Vec<String>,
     pub deny_capabilities: Vec<String>,
     pub allowlist_additions: Vec<String>,
+    pub explicit_policy: bool,
 }
 
 impl Default for ShellPolicyInputs {
@@ -233,6 +239,7 @@ impl Default for ShellPolicyInputs {
             allow_capabilities: Vec::new(),
             deny_capabilities: Vec::new(),
             allowlist_additions: Vec::new(),
+            explicit_policy: false,
         }
     }
 }
@@ -358,9 +365,19 @@ mod tests {
         assert!(!safe
             .active_capabilities
             .contains(&ShellCapabilityId::DockerRun));
+        assert!(safe
+            .allowlist_patterns
+            .contains(&"docker compose config".to_string()));
+        assert!(safe
+            .allowlist_patterns
+            .contains(&"python --version".to_string()));
+        assert!(safe
+            .allowlist_patterns
+            .contains(&"python3 --version".to_string()));
 
         let balanced = resolve_shell_policy(&ShellPolicyInputs {
             profile: ShellCapabilityProfile::Balanced,
+            explicit_policy: true,
             ..ShellPolicyInputs::default()
         })
         .expect("balanced should resolve");
@@ -376,6 +393,7 @@ mod tests {
 
         let dangerous = resolve_shell_policy(&ShellPolicyInputs {
             profile: ShellCapabilityProfile::Dangerous,
+            explicit_policy: true,
             ..ShellPolicyInputs::default()
         })
         .expect("dangerous should resolve");
@@ -400,6 +418,7 @@ mod tests {
             ],
             deny_capabilities: vec![ShellCapabilityId::DockerRun.as_str().to_string()],
             allowlist_additions: vec!["echo hello".to_string()],
+            explicit_policy: true,
         })
         .expect("policy should resolve");
 
@@ -424,6 +443,7 @@ mod tests {
     fn unknown_capability_returns_error() {
         let error = resolve_shell_policy(&ShellPolicyInputs {
             allow_capabilities: vec!["not.real".to_string()],
+            explicit_policy: true,
             ..ShellPolicyInputs::default()
         })
         .expect_err("invalid capability should error");

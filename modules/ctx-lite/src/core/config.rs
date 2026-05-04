@@ -25,7 +25,7 @@ impl AppConfig {
 
     pub fn effective_shell_whitelist(&self) -> Result<Vec<String>, ShellPolicyResolveError> {
         // Backward-compatible path: with no capability overrides, preserve the raw configured allowlist.
-        if self.shell_policy == ShellPolicyInputs::default() {
+        if !self.shell_policy.explicit_policy && self.shell_policy == ShellPolicyInputs::default() {
             return Ok(self.shell_whitelist.clone());
         }
 
@@ -82,6 +82,7 @@ mod tests {
         let config = AppConfig::default();
 
         assert_eq!(config.shell_policy.profile, ShellCapabilityProfile::Safe);
+        assert!(!config.shell_policy.explicit_policy);
         assert!(config.shell_policy.allow_capabilities.is_empty());
         assert!(config.shell_policy.deny_capabilities.is_empty());
         assert!(config.shell_policy.allowlist_additions.is_empty());
@@ -97,6 +98,7 @@ mod tests {
             shell_policy: ShellPolicyInputs {
                 profile: ShellCapabilityProfile::Balanced,
                 deny_capabilities: vec!["docker.logs".to_string()],
+                explicit_policy: true,
                 ..ShellPolicyInputs::default()
             },
             shell_whitelist: vec!["echo hello".to_string(), "npm test".to_string()],
@@ -121,5 +123,27 @@ mod tests {
             .expect("default effective allowlist should resolve");
 
         assert_eq!(effective, default_shell_allowlist());
+    }
+
+    #[test]
+    fn effective_shell_whitelist_uses_resolved_safe_profile_when_explicit() {
+        let config = AppConfig {
+            shell_policy: ShellPolicyInputs {
+                profile: ShellCapabilityProfile::Safe,
+                explicit_policy: true,
+                ..ShellPolicyInputs::default()
+            },
+            shell_whitelist: vec!["echo hello".to_string()],
+            ..AppConfig::default()
+        };
+
+        let effective = config
+            .effective_shell_whitelist()
+            .expect("explicit safe profile should resolve capabilities");
+
+        assert!(effective.contains(&"docker compose config".to_string()));
+        assert!(effective.contains(&"python --version".to_string()));
+        assert!(effective.contains(&"python3 --version".to_string()));
+        assert!(!effective.contains(&"echo hello".to_string()));
     }
 }

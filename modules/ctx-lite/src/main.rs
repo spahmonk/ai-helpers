@@ -4,7 +4,7 @@ use ctx_lite::app::contracts::{
     SearchRequestNormalized, SearchResponse, SearchService, ServiceError, ShellRequestNormalized,
     ShellResponse, ShellService, TreeRequestNormalized, TreeResponse, TreeService,
 };
-use ctx_lite::core::capabilities::ShellPolicyInputs;
+use ctx_lite::core::capabilities::{resolve_shell_policy, ShellPolicyInputs};
 use ctx_lite::core::config::AppConfig;
 use ctx_lite::core::doctor::{CheckSeverity, DoctorService as DoctorServiceImpl};
 use ctx_lite::core::fs::{FileReader, TreeBuilder};
@@ -155,6 +155,7 @@ struct StartupArgs {
 
 fn parse_startup_args(args: &[String]) -> Result<StartupArgs, String> {
     let parsed = parse_leading_process_args(args)?;
+    resolve_shell_policy(&parsed.shell_policy).map_err(|error| error.reason)?;
     Ok(StartupArgs {
         run_mcp: parsed.run_mcp,
         shell_policy: parsed.shell_policy,
@@ -226,6 +227,7 @@ mod tests {
         .expect("startup args should parse");
 
         assert!(parsed.run_mcp);
+        assert!(parsed.shell_policy.explicit_policy);
         assert_eq!(
             parsed.shell_policy.profile,
             ShellCapabilityProfile::Balanced
@@ -235,5 +237,20 @@ mod tests {
             vec!["npm.build".to_string(), "cargo.build".to_string()]
         );
         assert!(parsed.cli_args.is_empty());
+    }
+
+    #[test]
+    fn startup_arg_parser_rejects_invalid_capability_before_runtime() {
+        let error = parse_startup_args(&[
+            "--mcp".to_string(),
+            "--allow-capability".to_string(),
+            "not.real".to_string(),
+        ])
+        .expect_err("invalid capability should fail during startup parsing");
+
+        assert_eq!(
+            error,
+            "unknown shell capability id `not.real` in `allow_capabilities`"
+        );
     }
 }
