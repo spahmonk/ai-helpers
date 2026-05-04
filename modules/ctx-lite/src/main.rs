@@ -1,9 +1,10 @@
-use ctx_lite::app::cli::CliAdapter;
+use ctx_lite::app::cli::{parse_leading_process_args, CliAdapter};
 use ctx_lite::app::contracts::{
     DoctorRequest, DoctorResponse, DoctorService, ReadRequestNormalized, ReadResponse, ReadService,
     SearchRequestNormalized, SearchResponse, SearchService, ServiceError, ShellRequestNormalized,
     ShellResponse, ShellService, TreeRequestNormalized, TreeResponse, TreeService,
 };
+use ctx_lite::core::capabilities::ShellPolicyInputs;
 use ctx_lite::core::config::AppConfig;
 use ctx_lite::core::doctor::{CheckSeverity, DoctorService as DoctorServiceImpl};
 use ctx_lite::core::fs::{FileReader, TreeBuilder};
@@ -93,14 +94,18 @@ impl DoctorService for DoctorServiceAdapter {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-
-    // Check for --mcp flag first (should be run in MCP server mode)
-    if !args.is_empty() && args[0] == "--mcp" {
-        handle_mcp_mode();
-    }
+    let startup_args = parse_startup_args(&args).unwrap_or_else(|error| {
+        eprintln!("Error: {error}");
+        std::process::exit(1);
+    });
 
     let mut config = AppConfig::default();
     config.shell_enabled = true;
+    config.shell_policy = startup_args.shell_policy;
+
+    if startup_args.run_mcp {
+        handle_mcp_mode(config);
+    }
 
     let jail = PathJail::from_config(&config).unwrap_or_else(|e| {
         eprintln!("Error: {}", e.message);
@@ -136,17 +141,30 @@ fn main() {
         doctor_adapter,
     );
 
-    let result = cli.run(args);
+    let result = cli.run(startup_args.cli_args);
     print!("{}", result.output);
     std::process::exit(result.exit_code);
 }
 
-/// Handle MCP server mode: reads JSON-RPC requests from stdin
-fn handle_mcp_mode() -> ! {
-    use ctx_lite::app::mcp::McpAdapter;
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct StartupArgs {
+    run_mcp: bool,
+    shell_policy: ShellPolicyInputs,
+    cli_args: Vec<String>,
+}
 
-    let mut config = AppConfig::default();
-    config.shell_enabled = true;
+fn parse_startup_args(args: &[String]) -> Result<StartupArgs, String> {
+    let parsed = parse_leading_process_args(args)?;
+    Ok(StartupArgs {
+        run_mcp: parsed.run_mcp,
+        shell_policy: parsed.shell_policy,
+        cli_args: parsed.passthrough_args,
+    })
+}
+
+/// Handle MCP server mode: reads JSON-RPC requests from stdin
+fn handle_mcp_mode(config: AppConfig) -> ! {
+    use ctx_lite::app::mcp::McpAdapter;
 
     let jail = PathJail::from_config(&config).unwrap_or_else(|e| {
         eprintln!("Error: {}", e.message);
@@ -188,5 +206,34 @@ fn handle_mcp_mode() -> ! {
             eprintln!("MCP Error: {}", e);
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_startup_args;
+    use ctx_lite::core::capabilities::ShellCapabilityProfile;
+
+    #[test]
+    fn startup_arg_parser_supports_mcp_beyond_first_position() {
+        let parsed = parse_startup_args(&[
+            "--shell-profile".to_string(),
+            "balanced".to_string(),
+            "--mcp".to_string(),
+            "--allow-capability".to_string(),
+            "npm.build,cargo.build".to_string(),
+        ])
+        .expect("startup args should parse");
+
+        assert!(parsed.run_mcp);
+        assert_eq!(
+            parsed.shell_policy.profile,
+            ShellCapabilityProfile::Balanced
+        );
+        assert_eq!(
+            parsed.shell_policy.allow_capabilities,
+            vec!["npm.build".to_string(), "cargo.build".to_string()]
+        );
+        assert!(parsed.cli_args.is_empty());
     }
 }

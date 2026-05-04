@@ -3,7 +3,97 @@ use crate::app::contracts::{
     DoctorRequest, DoctorService, ReadRequest, ReadService, SearchRequest, SearchService,
     ShellRequest, ShellService, TreeRequest, TreeService,
 };
+use crate::core::capabilities::{ShellCapabilityProfile, ShellPolicyInputs};
 use crate::core::config::AppConfig;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LeadingProcessArgs {
+    pub run_mcp: bool,
+    pub shell_policy: ShellPolicyInputs,
+    pub passthrough_args: Vec<String>,
+}
+
+pub fn parse_leading_process_args(args: &[String]) -> Result<LeadingProcessArgs, String> {
+    let mut run_mcp = false;
+    let mut shell_policy = ShellPolicyInputs::default();
+    let mut index = 0;
+
+    while index < args.len() {
+        let token = args[index].as_str();
+        if is_subcommand(token) || is_passthrough_flag(token) {
+            break;
+        }
+
+        match token {
+            "--mcp" => {
+                run_mcp = true;
+                index += 1;
+            }
+            "--shell-profile" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --shell-profile".to_string())?;
+                shell_policy.profile = ShellCapabilityProfile::parse(value)
+                    .ok_or_else(|| format!("invalid shell profile `{value}`"))?;
+                index += 2;
+            }
+            "--allow-capability" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --allow-capability".to_string())?;
+                shell_policy
+                    .allow_capabilities
+                    .extend(parse_csv_list(value));
+                index += 2;
+            }
+            "--deny-capability" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --deny-capability".to_string())?;
+                shell_policy.deny_capabilities.extend(parse_csv_list(value));
+                index += 2;
+            }
+            "--allow-command" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "missing value for --allow-command".to_string())?;
+                let pattern = value.trim();
+                if pattern.is_empty() {
+                    return Err("missing value for --allow-command".to_string());
+                }
+                shell_policy.allowlist_additions.push(pattern.to_string());
+                index += 2;
+            }
+            _ => break,
+        }
+    }
+
+    Ok(LeadingProcessArgs {
+        run_mcp,
+        shell_policy,
+        passthrough_args: args[index..].to_vec(),
+    })
+}
+
+fn parse_csv_list(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn is_subcommand(token: &str) -> bool {
+    matches!(
+        token,
+        "read" | "tree" | "search" | "shell" | "doctor" | "setup-mcp"
+    )
+}
+
+fn is_passthrough_flag(token: &str) -> bool {
+    matches!(token, "--help" | "-h" | "--version" | "-v")
+}
 
 /// CLI result type with exit code
 pub struct CliResult {
@@ -277,7 +367,7 @@ where
 
 fn help_text() -> String {
     format!(
-        "ctx-lite {}\n\nUsage: ctx-lite <COMMAND> [OPTIONS] [ARGS]\n\nCommands:\n  read <path>              Read file at path\n  tree [path]              List directory tree\n  search <query>           Search for text/regex\n  shell <cwd> <command>    Execute whitelisted command\n  doctor                   Run diagnostics\n  setup-mcp                Configure MCP for Claude Desktop, Copilot CLI\n  --mcp                    Run in MCP server mode (stdin/stdout)\n  --help, -h               Show this help message\n  --version, -v            Show version\n",
+        "ctx-lite {}\n\nUsage: ctx-lite [GLOBAL_OPTIONS] <COMMAND> [OPTIONS] [ARGS]\n\nGlobal options:\n  --mcp                                  Run in MCP server mode (stdin/stdout)\n  --shell-profile <safe|balanced|dangerous>\n  --allow-capability <csv>\n  --deny-capability <csv>\n  --allow-command <pattern>              May be repeated\n  --help, -h                             Show this help message\n  --version, -v                          Show version\n\nCommands:\n  read <path>              Read file at path\n  tree [path]              List directory tree\n  search <query>           Search for text/regex\n  shell <cwd> <command>    Execute whitelisted command\n  doctor                   Run diagnostics\n  setup-mcp                Configure MCP for Claude Desktop, Copilot CLI\n",
         crate::version()
     )
 }
@@ -341,6 +431,7 @@ mod tests {
         DoctorCheck, DoctorResponse, ReadResponse, SearchHit, SearchResponse, ServiceError,
         ShellResponse, TreeEntry, TreeResponse,
     };
+    use crate::core::capabilities::ShellCapabilityProfile;
     use std::path::PathBuf;
 
     // Mock services for testing
@@ -655,5 +746,87 @@ mod tests {
         ]);
         assert_eq!(result.exit_code, 1);
         assert!(result.output.contains("Error"));
+    }
+
+    #[test]
+    fn parse_leading_process_args_reads_shell_policy_flags_only_before_subcommand() {
+        let parsed = parse_leading_process_args(&[
+            "--shell-profile".to_string(),
+            "balanced".to_string(),
+            "--allow-capability".to_string(),
+            "npm.test,cargo.check".to_string(),
+            "--deny-capability".to_string(),
+            "docker.logs".to_string(),
+            "--allow-command".to_string(),
+            "echo hello".to_string(),
+            "--allow-command".to_string(),
+            "git show --stat".to_string(),
+            "shell".to_string(),
+            ".".to_string(),
+            "git".to_string(),
+            "status".to_string(),
+            "--short".to_string(),
+        ])
+        .expect("leading process args should parse");
+
+        assert!(!parsed.run_mcp);
+        assert_eq!(
+            parsed.shell_policy.profile,
+            ShellCapabilityProfile::Balanced
+        );
+        assert_eq!(
+            parsed.shell_policy.allow_capabilities,
+            vec!["npm.test".to_string(), "cargo.check".to_string()]
+        );
+        assert_eq!(
+            parsed.shell_policy.deny_capabilities,
+            vec!["docker.logs".to_string()]
+        );
+        assert_eq!(
+            parsed.shell_policy.allowlist_additions,
+            vec!["echo hello".to_string(), "git show --stat".to_string()]
+        );
+        assert_eq!(
+            parsed.passthrough_args,
+            vec![
+                "shell".to_string(),
+                ".".to_string(),
+                "git".to_string(),
+                "status".to_string(),
+                "--short".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_leading_process_args_supports_mcp_not_first() {
+        let parsed = parse_leading_process_args(&[
+            "--shell-profile".to_string(),
+            "safe".to_string(),
+            "--mcp".to_string(),
+            "--allow-command".to_string(),
+            "echo ok".to_string(),
+        ])
+        .expect("leading process args should parse");
+
+        assert!(parsed.run_mcp);
+        assert!(parsed.passthrough_args.is_empty());
+        assert_eq!(
+            parsed.shell_policy.allowlist_additions,
+            vec!["echo ok".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_leading_process_args_rejects_invalid_profile() {
+        let error = parse_leading_process_args(&[
+            "--shell-profile".to_string(),
+            "unknown".to_string(),
+            "read".to_string(),
+            "file.txt".to_string(),
+        ])
+        .expect_err("invalid profile should error");
+
+        assert!(error.contains("invalid shell profile"));
     }
 }

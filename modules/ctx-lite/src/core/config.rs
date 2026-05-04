@@ -24,20 +24,13 @@ impl AppConfig {
     }
 
     pub fn effective_shell_whitelist(&self) -> Result<Vec<String>, ShellPolicyResolveError> {
+        // Backward-compatible path: with no capability overrides, preserve the raw configured allowlist.
         if self.shell_policy == ShellPolicyInputs::default() {
             return Ok(self.shell_whitelist.clone());
         }
 
         let effective_policy = self.resolve_shell_policy()?;
-        let mut merged_allowlist = effective_policy.allowlist_patterns;
-
-        for pattern in &self.shell_whitelist {
-            if !merged_allowlist.contains(pattern) {
-                merged_allowlist.push(pattern.clone());
-            }
-        }
-
-        Ok(merged_allowlist)
+        Ok(effective_policy.allowlist_patterns)
     }
 }
 
@@ -116,14 +109,7 @@ mod tests {
 
         assert!(effective.contains(&"npm run build".to_string()));
         assert!(!effective.contains(&"docker logs ...".to_string()));
-        assert!(effective.contains(&"echo hello".to_string()));
-        assert_eq!(
-            effective
-                .iter()
-                .filter(|pattern| pattern.as_str() == "npm test")
-                .count(),
-            1
-        );
+        assert!(!effective.contains(&"echo hello".to_string()));
     }
 
     #[test]

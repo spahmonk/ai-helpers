@@ -6,13 +6,27 @@ pub enum ShellCapabilityId {
     GitInspect,
     DockerInspect,
     DockerLogs,
-    NpmWorkflow,
-    CargoWorkflow,
-    PythonTesting,
-    RubyTesting,
-    DangerousFilesystemWrite,
-    DangerousNetwork,
-    DangerousProcessControl,
+    DockerComposePs,
+    DockerComposeLogs,
+    NpmTest,
+    NpmBuild,
+    NpmLint,
+    NpmTypecheck,
+    CargoTest,
+    CargoBuild,
+    CargoCheck,
+    CargoFmtCheck,
+    CargoClippy,
+    PythonPytest,
+    Python3Pytest,
+    RubyVersion,
+    RubyRspec,
+    DockerRun,
+    DockerBuild,
+    DockerComposeUp,
+    DockerExec,
+    NpmInstall,
+    CargoRun,
 }
 
 impl ShellCapabilityId {
@@ -21,13 +35,27 @@ impl ShellCapabilityId {
             Self::GitInspect => "git.inspect",
             Self::DockerInspect => "docker.inspect",
             Self::DockerLogs => "docker.logs",
-            Self::NpmWorkflow => "npm.workflow",
-            Self::CargoWorkflow => "cargo.workflow",
-            Self::PythonTesting => "python.testing",
-            Self::RubyTesting => "ruby.testing",
-            Self::DangerousFilesystemWrite => "dangerous.filesystem_write",
-            Self::DangerousNetwork => "dangerous.network",
-            Self::DangerousProcessControl => "dangerous.process_control",
+            Self::DockerComposePs => "docker.compose.ps",
+            Self::DockerComposeLogs => "docker.compose.logs",
+            Self::NpmTest => "npm.test",
+            Self::NpmBuild => "npm.build",
+            Self::NpmLint => "npm.lint",
+            Self::NpmTypecheck => "npm.typecheck",
+            Self::CargoTest => "cargo.test",
+            Self::CargoBuild => "cargo.build",
+            Self::CargoCheck => "cargo.check",
+            Self::CargoFmtCheck => "cargo.fmt.check",
+            Self::CargoClippy => "cargo.clippy",
+            Self::PythonPytest => "python.pytest",
+            Self::Python3Pytest => "python3.pytest",
+            Self::RubyVersion => "ruby.version",
+            Self::RubyRspec => "ruby.rspec",
+            Self::DockerRun => "docker.run",
+            Self::DockerBuild => "docker.build",
+            Self::DockerComposeUp => "docker.compose.up",
+            Self::DockerExec => "docker.exec",
+            Self::NpmInstall => "npm.install",
+            Self::CargoRun => "cargo.run",
         }
     }
 
@@ -36,13 +64,27 @@ impl ShellCapabilityId {
             "git.inspect" => Some(Self::GitInspect),
             "docker.inspect" => Some(Self::DockerInspect),
             "docker.logs" => Some(Self::DockerLogs),
-            "npm.workflow" => Some(Self::NpmWorkflow),
-            "cargo.workflow" => Some(Self::CargoWorkflow),
-            "python.testing" => Some(Self::PythonTesting),
-            "ruby.testing" => Some(Self::RubyTesting),
-            "dangerous.filesystem_write" => Some(Self::DangerousFilesystemWrite),
-            "dangerous.network" => Some(Self::DangerousNetwork),
-            "dangerous.process_control" => Some(Self::DangerousProcessControl),
+            "docker.compose.ps" => Some(Self::DockerComposePs),
+            "docker.compose.logs" => Some(Self::DockerComposeLogs),
+            "npm.test" => Some(Self::NpmTest),
+            "npm.build" => Some(Self::NpmBuild),
+            "npm.lint" => Some(Self::NpmLint),
+            "npm.typecheck" => Some(Self::NpmTypecheck),
+            "cargo.test" => Some(Self::CargoTest),
+            "cargo.build" => Some(Self::CargoBuild),
+            "cargo.check" => Some(Self::CargoCheck),
+            "cargo.fmt.check" => Some(Self::CargoFmtCheck),
+            "cargo.clippy" => Some(Self::CargoClippy),
+            "python.pytest" => Some(Self::PythonPytest),
+            "python3.pytest" => Some(Self::Python3Pytest),
+            "ruby.version" => Some(Self::RubyVersion),
+            "ruby.rspec" => Some(Self::RubyRspec),
+            "docker.run" => Some(Self::DockerRun),
+            "docker.build" => Some(Self::DockerBuild),
+            "docker.compose.up" => Some(Self::DockerComposeUp),
+            "docker.exec" => Some(Self::DockerExec),
+            "npm.install" => Some(Self::NpmInstall),
+            "cargo.run" => Some(Self::CargoRun),
             _ => None,
         }
     }
@@ -57,52 +99,58 @@ impl ShellCapabilityId {
                 "git diff --stat",
                 "git log --oneline -n 20",
             ],
-            Self::DockerInspect => &[
-                "docker ps",
-                "docker compose ps",
-                "docker inspect ...",
-                "docker compose config",
-                "docker version",
-            ],
-            Self::DockerLogs => &["docker logs ...", "docker compose logs ..."],
-            Self::NpmWorkflow => &[
-                "npm test",
-                "npm run build",
-                "npm run lint",
-                "npm run typecheck",
-            ],
-            Self::CargoWorkflow => &[
-                "cargo test ...",
-                "cargo build",
-                "cargo check",
-                "cargo fmt --check",
-                "cargo clippy --all-targets --all-features",
-            ],
-            Self::PythonTesting => &[
-                "python --version",
-                "python -m pytest ...",
-                "python3 --version",
-                "python3 -m pytest ...",
-            ],
-            Self::RubyTesting => &["ruby --version", "bundle exec rspec ..."],
-            Self::DangerousFilesystemWrite
-            | Self::DangerousNetwork
-            | Self::DangerousProcessControl => &[],
+            Self::DockerInspect => &["docker ps", "docker inspect ...", "docker version"],
+            Self::DockerLogs => &["docker logs ..."],
+            Self::DockerComposePs => &["docker compose ps"],
+            Self::DockerComposeLogs => &["docker compose logs ..."],
+            Self::NpmTest => &["npm test"],
+            Self::NpmBuild => &["npm run build"],
+            Self::NpmLint => &["npm run lint"],
+            Self::NpmTypecheck => &["npm run typecheck"],
+            Self::CargoTest => &["cargo test ..."],
+            Self::CargoBuild => &["cargo build"],
+            Self::CargoCheck => &["cargo check"],
+            Self::CargoFmtCheck => &["cargo fmt --check"],
+            Self::CargoClippy => &["cargo clippy --all-targets --all-features"],
+            Self::PythonPytest => &["python -m pytest ..."],
+            Self::Python3Pytest => &["python3 -m pytest ..."],
+            Self::RubyVersion => &["ruby --version"],
+            Self::RubyRspec => &["bundle exec rspec ..."],
+            Self::DockerRun => &["docker run ..."],
+            Self::DockerBuild => &["docker build ..."],
+            Self::DockerComposeUp => &["docker compose up ..."],
+            Self::DockerExec => &["docker exec ..."],
+            Self::NpmInstall => &["npm install ..."],
+            Self::CargoRun => &["cargo run ..."],
         }
     }
 }
 
-pub const ORDERED_SHELL_CAPABILITIES: [ShellCapabilityId; 10] = [
+pub const ORDERED_SHELL_CAPABILITIES: [ShellCapabilityId; 24] = [
     ShellCapabilityId::GitInspect,
     ShellCapabilityId::DockerInspect,
     ShellCapabilityId::DockerLogs,
-    ShellCapabilityId::NpmWorkflow,
-    ShellCapabilityId::CargoWorkflow,
-    ShellCapabilityId::PythonTesting,
-    ShellCapabilityId::RubyTesting,
-    ShellCapabilityId::DangerousFilesystemWrite,
-    ShellCapabilityId::DangerousNetwork,
-    ShellCapabilityId::DangerousProcessControl,
+    ShellCapabilityId::DockerComposePs,
+    ShellCapabilityId::DockerComposeLogs,
+    ShellCapabilityId::NpmTest,
+    ShellCapabilityId::NpmBuild,
+    ShellCapabilityId::NpmLint,
+    ShellCapabilityId::NpmTypecheck,
+    ShellCapabilityId::CargoTest,
+    ShellCapabilityId::CargoBuild,
+    ShellCapabilityId::CargoCheck,
+    ShellCapabilityId::CargoFmtCheck,
+    ShellCapabilityId::CargoClippy,
+    ShellCapabilityId::PythonPytest,
+    ShellCapabilityId::Python3Pytest,
+    ShellCapabilityId::RubyVersion,
+    ShellCapabilityId::RubyRspec,
+    ShellCapabilityId::DockerRun,
+    ShellCapabilityId::DockerBuild,
+    ShellCapabilityId::DockerComposeUp,
+    ShellCapabilityId::DockerExec,
+    ShellCapabilityId::NpmInstall,
+    ShellCapabilityId::CargoRun,
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -135,15 +183,35 @@ impl ShellCapabilityProfile {
             Self::Safe => &[
                 ShellCapabilityId::GitInspect,
                 ShellCapabilityId::DockerInspect,
+                ShellCapabilityId::DockerLogs,
+                ShellCapabilityId::DockerComposePs,
+                ShellCapabilityId::DockerComposeLogs,
+                ShellCapabilityId::NpmTest,
+                ShellCapabilityId::CargoTest,
+                ShellCapabilityId::PythonPytest,
+                ShellCapabilityId::Python3Pytest,
+                ShellCapabilityId::RubyVersion,
+                ShellCapabilityId::RubyRspec,
             ],
             Self::Balanced => &[
                 ShellCapabilityId::GitInspect,
                 ShellCapabilityId::DockerInspect,
                 ShellCapabilityId::DockerLogs,
-                ShellCapabilityId::NpmWorkflow,
-                ShellCapabilityId::CargoWorkflow,
-                ShellCapabilityId::PythonTesting,
-                ShellCapabilityId::RubyTesting,
+                ShellCapabilityId::DockerComposePs,
+                ShellCapabilityId::DockerComposeLogs,
+                ShellCapabilityId::NpmTest,
+                ShellCapabilityId::NpmBuild,
+                ShellCapabilityId::NpmLint,
+                ShellCapabilityId::NpmTypecheck,
+                ShellCapabilityId::CargoTest,
+                ShellCapabilityId::CargoBuild,
+                ShellCapabilityId::CargoCheck,
+                ShellCapabilityId::CargoFmtCheck,
+                ShellCapabilityId::CargoClippy,
+                ShellCapabilityId::PythonPytest,
+                ShellCapabilityId::Python3Pytest,
+                ShellCapabilityId::RubyVersion,
+                ShellCapabilityId::RubyRspec,
             ],
             Self::Dangerous => &ORDERED_SHELL_CAPABILITIES,
         }
@@ -272,99 +340,84 @@ mod tests {
     };
 
     #[test]
-    fn balanced_profile_contains_safe_plus_build_test_and_log_groups() {
-        let resolved = resolve_shell_policy(&ShellPolicyInputs {
+    fn profiles_compose_capabilities_per_spec() {
+        let safe =
+            resolve_shell_policy(&ShellPolicyInputs::default()).expect("safe should resolve");
+        assert!(safe
+            .active_capabilities
+            .contains(&ShellCapabilityId::GitInspect));
+        assert!(safe
+            .active_capabilities
+            .contains(&ShellCapabilityId::DockerComposeLogs));
+        assert!(safe
+            .active_capabilities
+            .contains(&ShellCapabilityId::NpmTest));
+        assert!(!safe
+            .active_capabilities
+            .contains(&ShellCapabilityId::NpmBuild));
+        assert!(!safe
+            .active_capabilities
+            .contains(&ShellCapabilityId::DockerRun));
+
+        let balanced = resolve_shell_policy(&ShellPolicyInputs {
             profile: ShellCapabilityProfile::Balanced,
             ..ShellPolicyInputs::default()
         })
-        .expect("balanced profile should resolve");
+        .expect("balanced should resolve");
+        assert!(balanced
+            .active_capabilities
+            .contains(&ShellCapabilityId::NpmBuild));
+        assert!(balanced
+            .active_capabilities
+            .contains(&ShellCapabilityId::CargoClippy));
+        assert!(!balanced
+            .active_capabilities
+            .contains(&ShellCapabilityId::DockerRun));
 
-        assert_eq!(
-            resolved.active_capabilities,
-            vec![
-                ShellCapabilityId::GitInspect,
-                ShellCapabilityId::DockerInspect,
-                ShellCapabilityId::DockerLogs,
-                ShellCapabilityId::NpmWorkflow,
-                ShellCapabilityId::CargoWorkflow,
-                ShellCapabilityId::PythonTesting,
-                ShellCapabilityId::RubyTesting,
-            ]
-        );
+        let dangerous = resolve_shell_policy(&ShellPolicyInputs {
+            profile: ShellCapabilityProfile::Dangerous,
+            ..ShellPolicyInputs::default()
+        })
+        .expect("dangerous should resolve");
+        assert!(dangerous
+            .active_capabilities
+            .contains(&ShellCapabilityId::DockerRun));
+        assert!(dangerous
+            .active_capabilities
+            .contains(&ShellCapabilityId::NpmInstall));
+        assert!(dangerous
+            .active_capabilities
+            .contains(&ShellCapabilityId::CargoRun));
+    }
+
+    #[test]
+    fn resolution_order_applies_allow_then_deny_then_custom_additions() {
+        let resolved = resolve_shell_policy(&ShellPolicyInputs {
+            profile: ShellCapabilityProfile::Safe,
+            allow_capabilities: vec![
+                ShellCapabilityId::NpmBuild.as_str().to_string(),
+                ShellCapabilityId::DockerRun.as_str().to_string(),
+            ],
+            deny_capabilities: vec![ShellCapabilityId::DockerRun.as_str().to_string()],
+            allowlist_additions: vec!["echo hello".to_string()],
+        })
+        .expect("policy should resolve");
+
+        assert!(resolved
+            .active_capabilities
+            .contains(&ShellCapabilityId::NpmBuild));
+        assert!(!resolved
+            .active_capabilities
+            .contains(&ShellCapabilityId::DockerRun));
         assert!(resolved
             .allowlist_patterns
             .contains(&"npm run build".to_string()));
-        assert!(resolved
-            .allowlist_patterns
-            .contains(&"docker logs ...".to_string()));
-    }
-
-    #[test]
-    fn deny_removes_profile_default_capability() {
-        let resolved = resolve_shell_policy(&ShellPolicyInputs {
-            profile: ShellCapabilityProfile::Balanced,
-            deny_capabilities: vec![ShellCapabilityId::DockerLogs.as_str().to_string()],
-            ..ShellPolicyInputs::default()
-        })
-        .expect("policy should resolve");
-
-        assert!(!resolved
-            .active_capabilities
-            .contains(&ShellCapabilityId::DockerLogs));
-        assert_eq!(
-            resolved.denied_capabilities,
-            vec![ShellCapabilityId::DockerLogs]
-        );
         assert!(!resolved
             .allowlist_patterns
-            .contains(&"docker logs ...".to_string()));
-    }
-
-    #[test]
-    fn custom_raw_allowlist_is_appended() {
-        let resolved = resolve_shell_policy(&ShellPolicyInputs {
-            allowlist_additions: vec![
-                "git ls-files".to_string(),
-                "echo hello".to_string(),
-                "echo hello".to_string(),
-            ],
-            ..ShellPolicyInputs::default()
-        })
-        .expect("policy should resolve");
-
-        assert_eq!(
-            resolved
-                .allowlist_patterns
-                .iter()
-                .filter(|pattern| pattern.as_str() == "git ls-files")
-                .count(),
-            1
-        );
-        assert_eq!(
-            resolved
-                .allowlist_patterns
-                .iter()
-                .filter(|pattern| pattern.as_str() == "echo hello")
-                .count(),
-            1
-        );
-    }
-
-    #[test]
-    fn explicit_allow_capability_extends_safe_baseline() {
-        let resolved = resolve_shell_policy(&ShellPolicyInputs {
-            profile: ShellCapabilityProfile::Safe,
-            allow_capabilities: vec![ShellCapabilityId::DockerLogs.as_str().to_string()],
-            ..ShellPolicyInputs::default()
-        })
-        .expect("policy should resolve");
-
-        assert!(resolved
-            .active_capabilities
-            .contains(&ShellCapabilityId::DockerLogs));
+            .contains(&"docker run ...".to_string()));
         assert!(resolved
             .allowlist_patterns
-            .contains(&"docker logs ...".to_string()));
+            .contains(&"echo hello".to_string()));
     }
 
     #[test]
