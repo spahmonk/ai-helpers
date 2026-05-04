@@ -55,7 +55,7 @@ ctx-lite setup-mcp --shell-profile balanced --deny-capability docker.compose.log
 
 ## 📦 Features
 
-- ✅ **87% Compression** - Exceed lean-ctx baseline
+- ✅ **87% Compression** - High-efficiency context reduction
 - ✅ **Cross-Platform** - Linux, macOS, Windows
 - ✅ **MCP Compatible** - Use as Model Context Protocol server
 - ✅ **Capability Policy** - `safe`, `balanced`, `dangerous` profiles + per-capability overrides
