@@ -1,4 +1,5 @@
 /// MCP setup: configures ctx-lite as an MCP server for various applications
+use crate::core::capabilities::{ShellCapabilityProfile, ShellPolicyInputs};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -62,6 +63,12 @@ pub struct McpSetup;
 impl McpSetup {
     /// Setup MCP for Claude Desktop
     pub fn setup_claude_desktop() -> Result<SetupResult, String> {
+        Self::setup_claude_desktop_with_policy(&ShellPolicyInputs::default())
+    }
+
+    pub fn setup_claude_desktop_with_policy(
+        policy_inputs: &ShellPolicyInputs,
+    ) -> Result<SetupResult, String> {
         let config_path = McpClient::ClaudeDesktop.config_path()?;
         Self::ensure_parent_dir(&config_path)?;
 
@@ -95,10 +102,7 @@ impl McpSetup {
                 if let Some(servers_obj) = mcp_servers.as_object_mut() {
                     servers_obj.insert(
                         "ctx-lite".to_string(),
-                        serde_json::json!({
-                            "command": "npx",
-                            "args": ["-y", "@spahmonk/ctx-lite"]
-                        }),
+                        claude_ctx_lite_server_config(policy_inputs),
                     );
                 }
             }
@@ -120,6 +124,12 @@ impl McpSetup {
 
     /// Setup MCP for Copilot CLI (LSP mode)
     pub fn setup_copilot_cli() -> Result<SetupResult, String> {
+        Self::setup_copilot_cli_with_policy(&ShellPolicyInputs::default())
+    }
+
+    pub fn setup_copilot_cli_with_policy(
+        policy_inputs: &ShellPolicyInputs,
+    ) -> Result<SetupResult, String> {
         let config_path = McpClient::CopilotCli.config_path()?;
         Self::ensure_parent_dir(&config_path)?;
 
@@ -153,19 +163,7 @@ impl McpSetup {
                 if let Some(servers_obj) = lsp_servers.as_object_mut() {
                     servers_obj.insert(
                         "ctx-lite".to_string(),
-                        serde_json::json!({
-                            "command": "ctx-lite",
-                            "args": [],
-                            "fileExtensions": {
-                                ".rs": "rust",
-                                ".ts": "typescript",
-                                ".tsx": "typescript",
-                                ".js": "javascript",
-                                ".jsx": "javascript",
-                                ".py": "python",
-                                ".go": "go"
-                            }
-                        }),
+                        copilot_ctx_lite_server_config(policy_inputs),
                     );
                 }
             }
@@ -220,6 +218,12 @@ impl McpSetup {
 
     /// Run interactive setup
     pub fn run_interactive() -> Result<Vec<SetupResult>, String> {
+        Self::run_interactive_with_policy(ShellPolicyInputs::default())
+    }
+
+    pub fn run_interactive_with_policy(
+        policy_inputs: ShellPolicyInputs,
+    ) -> Result<Vec<SetupResult>, String> {
         println!("\n🚀 Welcome to ctx-lite MCP Setup!\n");
         println!("This will configure ctx-lite as an MCP server for various applications.");
         println!("Your existing configurations will be backed up.\n");
@@ -227,7 +231,7 @@ impl McpSetup {
         let mut results = Vec::new();
 
         // Try Claude Desktop
-        match Self::setup_claude_desktop() {
+        match Self::setup_claude_desktop_with_policy(&policy_inputs) {
             Ok(result) => {
                 println!("  ✓ {}: {}", result.client.name(), result.message);
                 println!("    Config: {}", result.config_path.display());
@@ -239,7 +243,7 @@ impl McpSetup {
         }
 
         // Try Copilot CLI
-        match Self::setup_copilot_cli() {
+        match Self::setup_copilot_cli_with_policy(&policy_inputs) {
             Ok(result) => {
                 println!("  ✓ {}: {}", result.client.name(), result.message);
                 println!("    Config: {}", result.config_path.display());
@@ -263,4 +267,230 @@ pub struct SetupResult {
     pub client: McpClient,
     pub config_path: PathBuf,
     pub message: String,
+}
+
+fn build_setup_policy_args(inputs: &ShellPolicyInputs) -> Vec<String> {
+    let mut args = Vec::new();
+
+    if inputs.explicit_policy || inputs.profile != ShellCapabilityProfile::Safe {
+        args.push("--shell-profile".to_string());
+        args.push(inputs.profile.as_str().to_string());
+    }
+
+    if !inputs.allow_capabilities.is_empty() {
+        args.push("--allow-capability".to_string());
+        args.push(inputs.allow_capabilities.join(","));
+    }
+
+    if !inputs.deny_capabilities.is_empty() {
+        args.push("--deny-capability".to_string());
+        args.push(inputs.deny_capabilities.join(","));
+    }
+
+    for pattern in &inputs.allowlist_additions {
+        args.push("--allow-command".to_string());
+        args.push(pattern.clone());
+    }
+
+    args
+}
+
+fn claude_ctx_lite_server_config(policy_inputs: &ShellPolicyInputs) -> serde_json::Value {
+    let mut args = vec![
+        "-y".to_string(),
+        "@spahmonk/ctx-lite".to_string(),
+        "--mcp".to_string(),
+    ];
+    args.extend(build_setup_policy_args(policy_inputs));
+
+    serde_json::json!({
+        "command": "npx",
+        "args": args
+    })
+}
+
+fn copilot_ctx_lite_server_config(policy_inputs: &ShellPolicyInputs) -> serde_json::Value {
+    serde_json::json!({
+        "command": "ctx-lite",
+        "args": build_setup_policy_args(policy_inputs),
+        "fileExtensions": {
+            ".rs": "rust",
+            ".ts": "typescript",
+            ".tsx": "typescript",
+            ".js": "javascript",
+            ".jsx": "javascript",
+            ".py": "python",
+            ".go": "go"
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        build_setup_policy_args, claude_ctx_lite_server_config, copilot_ctx_lite_server_config,
+    };
+    use crate::core::capabilities::{ShellCapabilityProfile, ShellPolicyInputs};
+    use serde_json::json;
+
+    #[test]
+    fn setup_policy_args_include_explicit_safe_profile() {
+        let args = build_setup_policy_args(&ShellPolicyInputs {
+            profile: ShellCapabilityProfile::Safe,
+            explicit_policy: true,
+            ..ShellPolicyInputs::default()
+        });
+
+        assert_eq!(args, vec!["--shell-profile", "safe"]);
+    }
+
+    #[test]
+    fn setup_policy_args_omit_default_implicit_safe_profile() {
+        let args = build_setup_policy_args(&ShellPolicyInputs::default());
+
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn setup_policy_args_are_deterministic_for_all_supported_flags() {
+        let inputs = ShellPolicyInputs {
+            profile: ShellCapabilityProfile::Balanced,
+            allow_capabilities: vec!["npm.test".to_string(), "cargo.check".to_string()],
+            deny_capabilities: vec!["docker.compose.logs".to_string(), "docker.logs".to_string()],
+            allowlist_additions: vec!["echo hello".to_string(), "git show --stat".to_string()],
+            explicit_policy: true,
+        };
+
+        let args = build_setup_policy_args(&inputs);
+
+        assert_eq!(
+            args,
+            vec![
+                "--shell-profile".to_string(),
+                "balanced".to_string(),
+                "--allow-capability".to_string(),
+                "npm.test,cargo.check".to_string(),
+                "--deny-capability".to_string(),
+                "docker.compose.logs,docker.logs".to_string(),
+                "--allow-command".to_string(),
+                "echo hello".to_string(),
+                "--allow-command".to_string(),
+                "git show --stat".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn claude_config_includes_explicit_safe_profile() {
+        let config = claude_ctx_lite_server_config(&ShellPolicyInputs {
+            profile: ShellCapabilityProfile::Safe,
+            explicit_policy: true,
+            ..ShellPolicyInputs::default()
+        });
+
+        assert_eq!(
+            config["args"],
+            json!([
+                "-y",
+                "@spahmonk/ctx-lite",
+                "--mcp",
+                "--shell-profile",
+                "safe"
+            ])
+        );
+    }
+
+    #[test]
+    fn claude_entry_includes_mcp_and_policy_args() {
+        let inputs = ShellPolicyInputs {
+            profile: ShellCapabilityProfile::Balanced,
+            allow_capabilities: vec!["npm.test".to_string()],
+            deny_capabilities: vec!["docker.compose.logs".to_string()],
+            allowlist_additions: vec!["echo hello".to_string()],
+            explicit_policy: true,
+        };
+
+        let entry = claude_ctx_lite_server_config(&inputs);
+
+        assert_eq!(
+            entry,
+            json!({
+                "command": "npx",
+                "args": [
+                    "-y",
+                    "@spahmonk/ctx-lite",
+                    "--mcp",
+                    "--shell-profile",
+                    "balanced",
+                    "--allow-capability",
+                    "npm.test",
+                    "--deny-capability",
+                    "docker.compose.logs",
+                    "--allow-command",
+                    "echo hello"
+                ]
+            })
+        );
+    }
+
+    #[test]
+    fn copilot_config_includes_explicit_safe_profile() {
+        let config = copilot_ctx_lite_server_config(&ShellPolicyInputs {
+            profile: ShellCapabilityProfile::Safe,
+            explicit_policy: true,
+            ..ShellPolicyInputs::default()
+        });
+
+        assert_eq!(config["args"], json!(["--shell-profile", "safe"]));
+    }
+
+    #[test]
+    fn copilot_entry_includes_policy_args_when_provided() {
+        let inputs = ShellPolicyInputs {
+            profile: ShellCapabilityProfile::Safe,
+            allow_capabilities: vec!["npm.test".to_string()],
+            deny_capabilities: vec!["docker.compose.logs".to_string()],
+            allowlist_additions: vec!["echo hello".to_string()],
+            explicit_policy: true,
+        };
+
+        let entry = copilot_ctx_lite_server_config(&inputs);
+        let args = entry
+            .get("args")
+            .and_then(|value| value.as_array())
+            .expect("copilot args should be an array");
+
+        assert_eq!(
+            args,
+            &vec![
+                json!("--shell-profile"),
+                json!("safe"),
+                json!("--allow-capability"),
+                json!("npm.test"),
+                json!("--deny-capability"),
+                json!("docker.compose.logs"),
+                json!("--allow-command"),
+                json!("echo hello")
+            ]
+        );
+    }
+
+    #[test]
+    fn no_policy_inputs_keep_default_entries_minimal() {
+        let entry = copilot_ctx_lite_server_config(&ShellPolicyInputs::default());
+        let args = entry
+            .get("args")
+            .and_then(|value| value.as_array())
+            .expect("copilot args should be an array");
+        assert!(args.is_empty());
+
+        let claude_entry = claude_ctx_lite_server_config(&ShellPolicyInputs::default());
+        assert_eq!(
+            claude_entry,
+            json!({
+                "command": "npx",
+                "args": ["-y", "@spahmonk/ctx-lite", "--mcp"]
+            })
+        );
+    }
 }

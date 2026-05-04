@@ -12,13 +12,14 @@ ctx-lite exposes a full MCP server that AI coding assistants (Claude, Copilot CL
 
 ```bash
 # Configure ctx-lite for Claude Desktop and/or Copilot CLI
-ctx-lite setup-mcp
+ctx-lite setup-mcp --shell-profile balanced
 ```
 
 This command:
 - ✅ Detects your OS and available applications
 - ✅ Creates backups of existing configs
 - ✅ Registers ctx-lite as an MCP/LSP server
+- ✅ Writes capability-policy args into the generated config when requested
 - ✅ Does NOT overwrite other tools or servers
 
 ### Manual Setup
@@ -29,7 +30,7 @@ This command:
   "mcpServers": {
     "ctx-lite": {
       "command": "npx",
-      "args": ["-y", "@spahmonk/ctx-lite"]
+      "args": ["-y", "@spahmonk/ctx-lite", "--mcp", "--shell-profile", "balanced"]
     }
   }
 }
@@ -41,7 +42,7 @@ This command:
   "lspServers": {
     "ctx-lite": {
       "command": "ctx-lite",
-      "args": [],
+      "args": ["--shell-profile", "balanced"],
       "fileExtensions": {
         ".rs": "rust",
         ".ts": "typescript",
@@ -53,6 +54,68 @@ This command:
   }
 }
 ```
+
+## Shell Capability Policy
+
+ctx-lite exposes shell access through **named capabilities**. These map to the low-level raw allowlist, which remains the final execution boundary.
+
+### Profiles
+
+| Profile | What it enables |
+| --- | --- |
+| `safe` | inspect/log/test workflows only |
+| `balanced` | `safe` plus build/lint/typecheck workflows |
+| `dangerous` | side-effectful operations such as `docker run`, `docker build`, `docker compose up`, `docker exec`, `npm install`, `cargo run` |
+
+`dangerous` is always opt-in.
+
+### Runtime args
+
+These args work both directly and through generated MCP setup:
+
+```bash
+ctx-lite --mcp \
+  --shell-profile balanced \
+  --allow-capability docker.logs,cargo.test \
+  --deny-capability docker.compose.logs \
+  --allow-command "git show --stat"
+```
+
+Supported policy flags:
+
+- `--shell-profile <safe|balanced|dangerous>`
+- `--allow-capability <csv>`
+- `--deny-capability <csv>`
+- `--allow-command <pattern>` (repeatable)
+
+### Capability matrix
+
+| Capability | Commands enabled | Profile |
+| --- | --- | --- |
+| `git.inspect` | `git rev-parse --show-toplevel`, `git status --short`, `git status --branch --short`, `git ls-files`, `git diff --stat`, `git log --oneline -n 20` | safe |
+| `docker.inspect` | `docker ps`, `docker inspect ...`, `docker compose config`, `docker version` | safe |
+| `docker.logs` | `docker logs ...` | safe |
+| `docker.compose.ps` | `docker compose ps` | safe |
+| `docker.compose.logs` | `docker compose logs ...` | safe |
+| `npm.test` | `npm test` | safe |
+| `cargo.test` | `cargo test ...` | safe |
+| `python.pytest` | `python --version`, `python -m pytest ...` | safe |
+| `python3.pytest` | `python3 --version`, `python3 -m pytest ...` | safe |
+| `ruby.version` | `ruby --version` | safe |
+| `ruby.rspec` | `bundle exec rspec ...` | safe |
+| `npm.build` | `npm run build` | balanced |
+| `npm.lint` | `npm run lint` | balanced |
+| `npm.typecheck` | `npm run typecheck` | balanced |
+| `cargo.build` | `cargo build` | balanced |
+| `cargo.check` | `cargo check` | balanced |
+| `cargo.fmt.check` | `cargo fmt --check` | balanced |
+| `cargo.clippy` | `cargo clippy --all-targets --all-features` | balanced |
+| `docker.run` | `docker run ...` | dangerous |
+| `docker.build` | `docker build ...` | dangerous |
+| `docker.compose.up` | `docker compose up ...` | dangerous |
+| `docker.exec` | `docker exec ...` | dangerous |
+| `npm.install` | `npm install ...` | dangerous |
+| `cargo.run` | `cargo run ...` | dangerous |
 
 ## Available Tools
 
@@ -96,17 +159,17 @@ tree("src/", max_depth=2, include_hidden=true)
 - Exploring project structure
 
 ### 4. **shell** - Execute commands
-Run whitelisted shell commands (git, npm, cargo, python, etc.).
+Run only the commands allowed by the **effective capability policy**.
 
 ```
 shell("git log --oneline -10")
-shell("npm test", cwd="./packages/core")
-shell("git diff HEAD~1")
+shell("cargo test my_case", cwd="./modules/ctx-lite")
+shell("docker compose logs api")
 ```
 
 **Best for:**
 - Viewing git history and diffs
-- Running tests and builds
+- Running diagnostics, tests, and explicitly allowed builds
 - Getting environment information
 
 ### 5. **doctor** - Diagnostic checks
@@ -138,7 +201,8 @@ When you configure ctx-lite with MCP, AI agents receive detailed instructions on
 
 - **Search before reading**: Always search to know what you need
 - **Batch your context**: Gather related files together
-- **Use git commands**: Shell access to git is powerful
+- **Prefer read/search/tree first**: shell is a secondary tool
+- **Use only active shell capabilities**: instructions are generated from the effective profile
 - **Respect limits**: Large files are auto-truncated for efficiency
 - **Security first**: Paths are sandboxed (can't escape allowed dirs)
 
@@ -148,7 +212,7 @@ When you configure ctx-lite with MCP, AI agents receive detailed instructions on
 ✅ **Built-in instructions**: AI knows exactly how to use each tool
 ✅ **Security by default**: Path jails prevent accidental access
 ✅ **Performance optimized**: Parallel search, smart truncation
-✅ **Git integration**: Full shell access for blame, diff, log
+✅ **Policy-aware shell access**: Shell guidance matches the effective capability set
 ✅ **No installation needed**: Works with `npx` on any platform
 
 ## Examples
@@ -182,6 +246,18 @@ When you configure ctx-lite with MCP, AI agents receive detailed instructions on
 4. Analyze security, performance, correctness
 ```
 
+## Doctor Output
+
+`ctx-lite doctor` now reports the effective shell policy, including:
+
+- whether shell is enabled
+- active profile
+- active capability IDs
+- denied capability IDs
+- custom raw allowlist patterns
+
+Use it after `setup-mcp` or after changing process-level args to confirm what the runtime can actually execute.
+
 ## Configuration
 
 ### Claude Desktop Config Location
@@ -206,12 +282,13 @@ When you configure ctx-lite with MCP, AI agents receive detailed instructions on
 2. Check if `ctx-lite` is in PATH: `which ctx-lite`
 3. Run diagnostics: `ctx-lite doctor`
 4. Test MCP mode: `echo '{}' | ctx-lite --mcp`
+5. If shell behavior is narrower/broader than expected, inspect the generated `args` array for `--shell-profile`, `--allow-capability`, `--deny-capability`, and `--allow-command`
 
 ## Privacy & Security
 
 - ✅ All processing is local to your machine
 - ✅ Paths are sandboxed - can't read outside allowed directories
-- ✅ Shell commands are whitelisted for safety
+- ✅ Shell commands are gated by capability policy and raw allowlist matching
 - ✅ No data is sent to external services
 - ✅ Backups are created before modifying configs
 

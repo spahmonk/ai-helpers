@@ -133,10 +133,17 @@ impl ShellRequest {
             });
         }
 
-        let command = normalize_and_validate_command(&self.command, &config.shell_whitelist)
-            .map_err(|error| ContractError {
+        let effective_allowlist =
+            config
+                .effective_shell_whitelist()
+                .map_err(|error| ContractError {
+                    reason: error.reason,
+                })?;
+        let command = normalize_and_validate_command(&self.command, &effective_allowlist).map_err(
+            |error| ContractError {
                 reason: error.reason,
-            })?;
+            },
+        )?;
 
         Ok(ShellRequestNormalized {
             command,
@@ -169,6 +176,7 @@ pub struct DoctorCheck {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DoctorResponse {
     pub checks: Vec<DoctorCheck>,
+    pub overall_severity: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -440,6 +448,7 @@ mod tests {
         TreeRequestNormalized, TreeResponse, TreeService,
     };
     use crate::app::AppServices;
+    use crate::core::capabilities::{ShellCapabilityProfile, ShellPolicyInputs};
     use crate::core::config::AppConfig;
     use std::path::PathBuf;
 
@@ -552,6 +561,36 @@ mod tests {
             "unexpected shell error: {}",
             error.reason
         );
+    }
+
+    #[test]
+    fn shell_requests_use_effective_policy_allowlist_when_policy_is_overridden() {
+        let config = AppConfig {
+            shell_enabled: true,
+            shell_whitelist: vec!["echo hello".into()],
+            shell_policy: ShellPolicyInputs {
+                profile: ShellCapabilityProfile::Safe,
+                allow_capabilities: vec!["npm.build".into()],
+                ..ShellPolicyInputs::default()
+            },
+            ..AppConfig::default()
+        };
+
+        let denied = ShellRequest {
+            command: "echo hello".into(),
+            cwd: None,
+        }
+        .normalize(&config);
+        assert!(denied.is_err());
+
+        let allowed = ShellRequest {
+            command: "npm run build".into(),
+            cwd: None,
+        }
+        .normalize(&config)
+        .expect("policy override should control shell normalization");
+
+        assert_eq!(allowed.command.rendered(), "npm run build");
     }
 
     #[test]
@@ -853,6 +892,7 @@ mod tests {
         impl DoctorService for DoctorStub {
             fn doctor(&self, request: DoctorRequest) -> Result<DoctorResponse, ServiceError> {
                 Ok(DoctorResponse {
+                    overall_severity: "ok".into(),
                     checks: vec![DoctorCheck {
                         name: "storage".into(),
                         passed: request.include_storage,

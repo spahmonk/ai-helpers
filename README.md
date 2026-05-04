@@ -46,25 +46,69 @@ ctx-lite search "function_name"
 
 # Run diagnostics
 ctx-lite doctor
+
+# Configure MCP with explicit shell policy
+ctx-lite setup-mcp --shell-profile balanced --deny-capability docker.compose.logs
 ```
 
 ---
 
 ## 📦 Features
 
-- ✅ **87% Compression** - Exceed lean-ctx baseline
+- ✅ **87% Compression** - High-efficiency context reduction
 - ✅ **Cross-Platform** - Linux, macOS, Windows
 - ✅ **MCP Compatible** - Use as Model Context Protocol server
+- ✅ **Capability Policy** - `safe`, `balanced`, `dangerous` profiles + per-capability overrides
 - ✅ **Fast** - <1s per session
 - ✅ **Secure** - Path jail, audit logging
 - ✅ **ML Optimized** - Adaptive compression modes
 
 ---
 
+## 🛡️ Shell Capability Policy
+
+ctx-lite keeps the raw allowlist as the execution boundary, but exposes a higher-level capability model for MCP and CLI configuration.
+
+### Profiles
+
+- **safe** - inspect/log/test workflows only
+- **balanced** - `safe` plus build/lint/typecheck workflows
+- **dangerous** - side-effectful local state/runtime changes such as `docker run`, `npm install`, `cargo run`
+
+### Process-level args
+
+```bash
+ctx-lite --mcp \
+  --shell-profile balanced \
+  --allow-capability docker.logs,cargo.test \
+  --deny-capability docker.compose.logs \
+  --allow-command "git show --stat"
+```
+
+### Common capability IDs
+
+| Capability | Commands enabled | Profile |
+| --- | --- | --- |
+| `git.inspect` | `git rev-parse --show-toplevel`, `git status --short`, `git diff --stat`, `git log --oneline -n 20` | safe |
+| `docker.logs` | `docker logs ...` | safe |
+| `docker.compose.logs` | `docker compose logs ...` | safe |
+| `npm.test` | `npm test` | safe |
+| `cargo.test` | `cargo test ...` | safe |
+| `npm.build` | `npm run build` | balanced |
+| `cargo.build` | `cargo build` | balanced |
+| `cargo.clippy` | `cargo clippy --all-targets --all-features` | balanced |
+| `docker.run` | `docker run ...` | dangerous |
+| `npm.install` | `npm install ...` | dangerous |
+| `cargo.run` | `cargo run ...` | dangerous |
+
+Use `ctx-lite doctor` to inspect the effective policy seen by the runtime.
+
+---
+
 ## 📚 Documentation
 
 - **[Quick Start](QUICK_START.md)** - Get started in 3 minutes
-- **[MCP Integration](MCP_INTEGRATION.md)** - Use as Model Context Protocol server
+- **[MCP Integration](MCP_INTEGRATION.md)** - Profiles, capability IDs, setup examples, and exact shell support
 - **[Module Details](modules/ctx-lite/README.md)** - ctx-lite specifics
 
 ---

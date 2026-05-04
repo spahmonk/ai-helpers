@@ -1,6 +1,7 @@
 pub mod audit;
 pub mod budget;
 pub mod cache;
+pub mod capabilities;
 pub mod config;
 pub mod diff;
 pub mod doctor;
