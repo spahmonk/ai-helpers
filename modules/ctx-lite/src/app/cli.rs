@@ -88,6 +88,17 @@ fn parse_csv_list(value: &str) -> Vec<String> {
         .collect()
 }
 
+fn parse_setup_mcp_policy_args(args: &[String]) -> Result<ShellPolicyInputs, String> {
+    let parsed = parse_leading_process_args(args)?;
+    if parsed.run_mcp {
+        return Err("unknown option for setup-mcp: --mcp".to_string());
+    }
+    if let Some(unknown) = parsed.passthrough_args.first() {
+        return Err(format!("unknown option for setup-mcp: {unknown}"));
+    }
+    Ok(parsed.shell_policy)
+}
+
 fn is_subcommand(token: &str) -> bool {
     matches!(
         token,
@@ -336,8 +347,18 @@ where
         }
     }
 
-    fn handle_setup_mcp(&self, _args: &[String]) -> CliResult {
-        match crate::app::setup_mcp::McpSetup::run_interactive() {
+    fn handle_setup_mcp(&self, args: &[String]) -> CliResult {
+        let policy_inputs = match parse_setup_mcp_policy_args(args) {
+            Ok(parsed) => parsed,
+            Err(err) => {
+                return CliResult {
+                    output: format!("Error: {}\n", err),
+                    exit_code: 1,
+                };
+            }
+        };
+
+        match crate::app::setup_mcp::McpSetup::run_interactive_with_policy(policy_inputs) {
             Ok(results) => {
                 let mut output = String::new();
                 for result in results {
@@ -371,7 +392,7 @@ where
 
 fn help_text() -> String {
     format!(
-        "ctx-lite {}\n\nUsage: ctx-lite [GLOBAL_OPTIONS] <COMMAND> [OPTIONS] [ARGS]\n\nGlobal options:\n  --mcp                                  Run in MCP server mode (stdin/stdout)\n  --shell-profile <safe|balanced|dangerous>\n  --allow-capability <csv>\n  --deny-capability <csv>\n  --allow-command <pattern>              May be repeated\n  --help, -h                             Show this help message\n  --version, -v                          Show version\n\nCommands:\n  read <path>              Read file at path\n  tree [path]              List directory tree\n  search <query>           Search for text/regex\n  shell <cwd> <command>    Execute whitelisted command\n  doctor                   Run diagnostics\n  setup-mcp                Configure MCP for Claude Desktop, Copilot CLI\n",
+        "ctx-lite {}\n\nUsage: ctx-lite [GLOBAL_OPTIONS] <COMMAND> [OPTIONS] [ARGS]\n\nGlobal options:\n  --mcp                                  Run in MCP server mode (stdin/stdout)\n  --shell-profile <safe|balanced|dangerous>\n  --allow-capability <csv>\n  --deny-capability <csv>\n  --allow-command <pattern>              May be repeated\n  --help, -h                             Show this help message\n  --version, -v                          Show version\n\nCommands:\n  read <path>              Read file at path\n  tree [path]              List directory tree\n  search <query>           Search for text/regex\n  shell <cwd> <command>    Execute whitelisted command\n  doctor                   Run diagnostics\n  setup-mcp [POLICY_OPTS] Configure MCP for Claude Desktop, Copilot CLI\n",
         crate::version()
     )
 }
@@ -825,11 +846,8 @@ mod tests {
 
     #[test]
     fn parse_leading_process_args_keeps_explicit_flag_false_without_policy_flags() {
-        let parsed = parse_leading_process_args(&[
-            "--mcp".to_string(),
-            "doctor".to_string(),
-        ])
-        .expect("args without shell policy flags should parse");
+        let parsed = parse_leading_process_args(&["--mcp".to_string(), "doctor".to_string()])
+            .expect("args without shell policy flags should parse");
 
         assert!(parsed.run_mcp);
         assert!(!parsed.shell_policy.explicit_policy);
@@ -847,5 +865,45 @@ mod tests {
         .expect_err("invalid profile should error");
 
         assert!(error.contains("invalid shell profile"));
+    }
+
+    #[test]
+    fn parse_setup_mcp_policy_args_accepts_policy_flags() {
+        let parsed = parse_setup_mcp_policy_args(&[
+            "--shell-profile".to_string(),
+            "balanced".to_string(),
+            "--allow-capability".to_string(),
+            "npm.test,cargo.check".to_string(),
+            "--deny-capability".to_string(),
+            "docker.compose.logs".to_string(),
+            "--allow-command".to_string(),
+            "echo hello".to_string(),
+            "--allow-command".to_string(),
+            "git show --stat".to_string(),
+        ])
+        .expect("setup-mcp policy args should parse");
+
+        assert_eq!(parsed.profile, ShellCapabilityProfile::Balanced);
+        assert_eq!(
+            parsed.allow_capabilities,
+            vec!["npm.test".to_string(), "cargo.check".to_string()]
+        );
+        assert_eq!(
+            parsed.deny_capabilities,
+            vec!["docker.compose.logs".to_string()]
+        );
+        assert_eq!(
+            parsed.allowlist_additions,
+            vec!["echo hello".to_string(), "git show --stat".to_string()]
+        );
+        assert!(parsed.explicit_policy);
+    }
+
+    #[test]
+    fn parse_setup_mcp_policy_args_rejects_unknown_flags() {
+        let err = parse_setup_mcp_policy_args(&["--unknown".to_string(), "value".to_string()])
+            .expect_err("unknown setup-mcp options should be rejected");
+
+        assert!(err.contains("unknown option for setup-mcp"));
     }
 }
