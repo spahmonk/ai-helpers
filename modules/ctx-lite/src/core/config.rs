@@ -23,12 +23,21 @@ impl AppConfig {
         resolve_shell_policy(&self.shell_policy)
     }
 
-    pub fn refresh_shell_whitelist_from_policy(
-        &mut self,
-    ) -> Result<EffectiveShellPolicy, ShellPolicyResolveError> {
+    pub fn effective_shell_whitelist(&self) -> Result<Vec<String>, ShellPolicyResolveError> {
+        if self.shell_policy == ShellPolicyInputs::default() {
+            return Ok(self.shell_whitelist.clone());
+        }
+
         let effective_policy = self.resolve_shell_policy()?;
-        self.shell_whitelist = effective_policy.allowlist_patterns.clone();
-        Ok(effective_policy)
+        let mut merged_allowlist = effective_policy.allowlist_patterns;
+
+        for pattern in &self.shell_whitelist {
+            if !merged_allowlist.contains(pattern) {
+                merged_allowlist.push(pattern.clone());
+            }
+        }
+
+        Ok(merged_allowlist)
     }
 }
 
@@ -36,9 +45,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         let project_root = PathBuf::from(".");
         let shell_policy = ShellPolicyInputs::default();
-        let shell_whitelist = resolve_shell_policy(&shell_policy)
-            .map(|effective_policy| effective_policy.allowlist_patterns)
-            .unwrap_or_else(|_| default_shell_allowlist());
+        let shell_whitelist = default_shell_allowlist();
 
         Self {
             project_root: project_root.clone(),
@@ -60,6 +67,7 @@ mod tests {
     use crate::core::capabilities::{
         resolve_shell_policy, ShellCapabilityProfile, ShellPolicyInputs,
     };
+    use crate::core::shell::default_shell_allowlist;
     use std::path::PathBuf;
 
     #[test]
@@ -69,10 +77,7 @@ mod tests {
         assert_eq!(config.project_root, PathBuf::from("."));
         assert_eq!(config.allowed_roots, vec![PathBuf::from(".")]);
         assert!(!config.shell_enabled);
-        assert!(config
-            .shell_whitelist
-            .contains(&"git rev-parse --show-toplevel".to_string()));
-        assert!(config.shell_whitelist.contains(&"git ls-files".to_string()));
+        assert_eq!(config.shell_whitelist, default_shell_allowlist());
         assert_eq!(config.max_read_bytes, 1_048_576);
         assert_eq!(config.max_shell_output_bytes, 65_536);
         assert!(!config.memory_enabled);
@@ -88,8 +93,47 @@ mod tests {
         assert!(config.shell_policy.deny_capabilities.is_empty());
         assert!(config.shell_policy.allowlist_additions.is_empty());
 
-        let expected = resolve_shell_policy(&ShellPolicyInputs::default())
+        let resolved = resolve_shell_policy(&ShellPolicyInputs::default())
             .expect("default policy inputs should always resolve");
-        assert_eq!(config.shell_whitelist, expected.allowlist_patterns);
+        assert_ne!(config.shell_whitelist, resolved.allowlist_patterns);
+    }
+
+    #[test]
+    fn effective_shell_whitelist_uses_policy_when_overridden() {
+        let config = AppConfig {
+            shell_policy: ShellPolicyInputs {
+                profile: ShellCapabilityProfile::Balanced,
+                deny_capabilities: vec!["docker.logs".to_string()],
+                ..ShellPolicyInputs::default()
+            },
+            shell_whitelist: vec!["echo hello".to_string(), "npm test".to_string()],
+            ..AppConfig::default()
+        };
+
+        let effective = config
+            .effective_shell_whitelist()
+            .expect("effective allowlist should resolve");
+
+        assert!(effective.contains(&"npm run build".to_string()));
+        assert!(!effective.contains(&"docker logs ...".to_string()));
+        assert!(effective.contains(&"echo hello".to_string()));
+        assert_eq!(
+            effective
+                .iter()
+                .filter(|pattern| pattern.as_str() == "npm test")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn effective_shell_whitelist_preserves_backward_compatible_default() {
+        let config = AppConfig::default();
+
+        let effective = config
+            .effective_shell_whitelist()
+            .expect("default effective allowlist should resolve");
+
+        assert_eq!(effective, default_shell_allowlist());
     }
 }

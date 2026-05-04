@@ -1,4 +1,5 @@
 use std::collections::{BTreeSet, HashSet};
+use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ShellCapabilityId {
@@ -181,6 +182,14 @@ pub struct ShellPolicyResolveError {
     pub reason: String,
 }
 
+impl fmt::Display for ShellPolicyResolveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.reason)
+    }
+}
+
+impl std::error::Error for ShellPolicyResolveError {}
+
 pub fn resolve_shell_policy(
     inputs: &ShellPolicyInputs,
 ) -> Result<EffectiveShellPolicy, ShellPolicyResolveError> {
@@ -210,13 +219,18 @@ pub fn resolve_shell_policy(
     let mut allowlist_patterns = Vec::new();
     for capability in &active_capabilities {
         for pattern in capability.allowlist_patterns() {
-            if seen_patterns.insert(*pattern) {
-                allowlist_patterns.push((*pattern).to_string());
+            let pattern = (*pattern).to_string();
+            if seen_patterns.insert(pattern.clone()) {
+                allowlist_patterns.push(pattern);
             }
         }
     }
 
-    allowlist_patterns.extend(inputs.allowlist_additions.iter().cloned());
+    for pattern in &inputs.allowlist_additions {
+        if seen_patterns.insert(pattern.clone()) {
+            allowlist_patterns.push(pattern.clone());
+        }
+    }
 
     Ok(EffectiveShellPolicy {
         active_profile: inputs.profile,
@@ -309,14 +323,61 @@ mod tests {
     #[test]
     fn custom_raw_allowlist_is_appended() {
         let resolved = resolve_shell_policy(&ShellPolicyInputs {
-            allowlist_additions: vec!["echo hello".to_string(), "pwd".to_string()],
+            allowlist_additions: vec![
+                "git ls-files".to_string(),
+                "echo hello".to_string(),
+                "echo hello".to_string(),
+            ],
             ..ShellPolicyInputs::default()
         })
         .expect("policy should resolve");
 
         assert_eq!(
-            resolved.allowlist_patterns[resolved.allowlist_patterns.len() - 2..],
-            ["echo hello", "pwd"]
+            resolved
+                .allowlist_patterns
+                .iter()
+                .filter(|pattern| pattern.as_str() == "git ls-files")
+                .count(),
+            1
+        );
+        assert_eq!(
+            resolved
+                .allowlist_patterns
+                .iter()
+                .filter(|pattern| pattern.as_str() == "echo hello")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn explicit_allow_capability_extends_safe_baseline() {
+        let resolved = resolve_shell_policy(&ShellPolicyInputs {
+            profile: ShellCapabilityProfile::Safe,
+            allow_capabilities: vec![ShellCapabilityId::DockerLogs.as_str().to_string()],
+            ..ShellPolicyInputs::default()
+        })
+        .expect("policy should resolve");
+
+        assert!(resolved
+            .active_capabilities
+            .contains(&ShellCapabilityId::DockerLogs));
+        assert!(resolved
+            .allowlist_patterns
+            .contains(&"docker logs ...".to_string()));
+    }
+
+    #[test]
+    fn unknown_capability_returns_error() {
+        let error = resolve_shell_policy(&ShellPolicyInputs {
+            allow_capabilities: vec!["not.real".to_string()],
+            ..ShellPolicyInputs::default()
+        })
+        .expect_err("invalid capability should error");
+
+        assert_eq!(
+            error.reason,
+            "unknown shell capability id `not.real` in `allow_capabilities`"
         );
     }
 }
