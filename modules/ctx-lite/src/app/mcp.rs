@@ -328,7 +328,8 @@ where
 
     fn effective_shell_tool_description(&self) -> String {
         if !self.config.shell_enabled {
-            return "Execute shell commands - currently disabled in this configuration.".to_string();
+            return "Execute shell commands - currently disabled in this configuration."
+                .to_string();
         }
         match self.config.resolve_shell_policy() {
             Ok(policy) => {
@@ -1286,10 +1287,22 @@ mod tests {
             .and_then(|i| i.as_str())
             .expect("instructions should be present");
 
-        assert!(!instructions.contains("docker run"), "safe profile should not mention docker run");
-        assert!(!instructions.contains("npm install"), "safe profile should not mention npm install");
-        assert!(!instructions.contains("cargo run"), "safe profile should not mention cargo run");
-        assert!(instructions.contains("git"), "safe profile should mention git");
+        assert!(
+            !instructions.contains("docker run"),
+            "safe profile should not mention docker run"
+        );
+        assert!(
+            !instructions.contains("npm install"),
+            "safe profile should not mention npm install"
+        );
+        assert!(
+            !instructions.contains("cargo run"),
+            "safe profile should not mention cargo run"
+        );
+        assert!(
+            instructions.contains("git"),
+            "safe profile should mention git"
+        );
     }
 
     #[test]
@@ -1306,7 +1319,11 @@ mod tests {
             .get("result")
             .and_then(|r| r.get("tools"))
             .and_then(|t| t.as_array())
-            .and_then(|tools| tools.iter().find(|t| t.get("name") == Some(&json!("shell"))))
+            .and_then(|tools| {
+                tools
+                    .iter()
+                    .find(|t| t.get("name") == Some(&json!("shell")))
+            })
             .expect("shell tool should be present");
 
         let description = shell_tool
@@ -1314,7 +1331,10 @@ mod tests {
             .and_then(|d| d.as_str())
             .expect("shell tool description should be present");
 
-        assert!(description.contains("safe"), "shell description should mention the active profile");
+        assert!(
+            description.contains("safe"),
+            "shell description should mention the active profile"
+        );
     }
 
     #[test]
@@ -1344,6 +1364,9 @@ mod tests {
             .and_then(|r| r.get("instructions"))
             .and_then(|i| i.as_str())
             .unwrap();
-        assert!(instructions.contains("docker logs"), "safe profile includes docker.logs capability");
+        assert!(
+            instructions.contains("docker logs"),
+            "safe profile includes docker.logs capability"
+        );
     }
 }

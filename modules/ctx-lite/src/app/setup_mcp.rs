@@ -390,7 +390,13 @@ mod tests {
 
         assert_eq!(
             config["args"],
-            json!(["-y", "@spahmonk/ctx-lite", "--mcp", "--shell-profile", "safe"])
+            json!([
+                "-y",
+                "@spahmonk/ctx-lite",
+                "--mcp",
+                "--shell-profile",
+                "safe"
+            ])
         );
     }
 

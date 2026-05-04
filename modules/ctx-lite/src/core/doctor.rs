@@ -171,9 +171,7 @@ impl DoctorService {
             Err(error) => DoctorCheck {
                 name: "shell_effective_policy".to_string(),
                 severity: CheckSeverity::Error,
-                message: format!(
-                    "shell_enabled={shell_enabled}; policy resolve error: {error}"
-                ),
+                message: format!("shell_enabled={shell_enabled}; policy resolve error: {error}"),
             },
         }
     }
@@ -186,9 +184,11 @@ impl DoctorService {
             .iter()
             .copied()
             .filter(|cap| {
-                cap.allowlist_patterns()
-                    .iter()
-                    .any(|pattern| allowlist.iter().any(|entry| entry.contains(pattern.trim_end_matches(" ..."))))
+                cap.allowlist_patterns().iter().any(|pattern| {
+                    allowlist
+                        .iter()
+                        .any(|entry| entry.contains(pattern.trim_end_matches(" ...")))
+                })
             })
             .collect()
     }
