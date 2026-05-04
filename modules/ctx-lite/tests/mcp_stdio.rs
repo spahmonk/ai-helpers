@@ -284,3 +284,45 @@ fn mcp_server_replies_with_json_line_for_json_line_requests() {
     assert_eq!(payload["jsonrpc"], "2.0");
     assert_eq!(payload["id"], 1);
 }
+
+#[test]
+fn mcp_server_returns_error_and_continues_session_on_unknown_method() {
+    let (mut child, responses) = spawn_mcp_server();
+
+    send_request(
+        &mut child,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "unknown/method"
+        }),
+    );
+
+    let error_response = responses
+        .recv_timeout(Duration::from_secs(2))
+        .expect("expected error response for unknown method");
+    let error_payload: Value =
+        serde_json::from_str(&error_response).expect("error response should be json");
+    assert_eq!(error_payload["id"], 1);
+    assert_eq!(error_payload["error"]["code"], -32601);
+
+    send_request(
+        &mut child,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/list"
+        }),
+    );
+
+    let ok_response = responses
+        .recv_timeout(Duration::from_secs(2))
+        .expect("expected tools/list response after unknown method");
+    let ok_payload: Value =
+        serde_json::from_str(&ok_response).expect("tools/list response should be json");
+
+    stop_child(&mut child);
+
+    assert_eq!(ok_payload["id"], 2);
+    assert!(ok_payload["result"]["tools"].is_array());
+}

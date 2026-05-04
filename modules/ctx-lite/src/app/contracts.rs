@@ -176,6 +176,7 @@ pub struct DoctorCheck {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DoctorResponse {
     pub checks: Vec<DoctorCheck>,
+    pub overall_severity: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -891,6 +892,7 @@ mod tests {
         impl DoctorService for DoctorStub {
             fn doctor(&self, request: DoctorRequest) -> Result<DoctorResponse, ServiceError> {
                 Ok(DoctorResponse {
+                    overall_severity: "ok".into(),
                     checks: vec![DoctorCheck {
                         name: "storage".into(),
                         passed: request.include_storage,

@@ -437,7 +437,7 @@ fn format_shell_response(response: &crate::app::contracts::ShellResponse) -> Str
 }
 
 fn format_doctor_response(response: &crate::app::contracts::DoctorResponse) -> String {
-    let mut output = "Diagnostics:\n".to_string();
+    let mut output = format!("Diagnostics (overall: {}):\n", response.overall_severity);
     for check in &response.checks {
         let status = if check.passed { "✓" } else { "✗" };
         output.push_str(&format!("  {} {}", status, check.name));
@@ -535,6 +535,7 @@ mod tests {
     impl DoctorService for MockDoctorService {
         fn doctor(&self, _request: DoctorRequest) -> Result<DoctorResponse, ServiceError> {
             Ok(DoctorResponse {
+                overall_severity: "ok".to_string(),
                 checks: vec![DoctorCheck {
                     name: "test_check".to_string(),
                     passed: true,

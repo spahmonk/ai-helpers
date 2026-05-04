@@ -815,6 +815,7 @@ mod tests {
         ) -> Result<crate::app::contracts::DoctorResponse, crate::app::contracts::ServiceError>
         {
             Ok(crate::app::contracts::DoctorResponse {
+                overall_severity: "ok".to_string(),
                 checks: vec![crate::app::contracts::DoctorCheck {
                     name: "test_check".to_string(),
                     passed: true,

@@ -76,6 +76,11 @@ impl DoctorService for DoctorServiceAdapter {
     fn doctor(&self, _request: DoctorRequest) -> Result<DoctorResponse, ServiceError> {
         let report = DoctorServiceImpl::run(&self.config);
         Ok(DoctorResponse {
+            overall_severity: match report.overall_severity {
+                CheckSeverity::Ok => "ok".to_string(),
+                CheckSeverity::Warning => "warning".to_string(),
+                CheckSeverity::Error => "error".to_string(),
+            },
             checks: report
                 .checks
                 .into_iter()
