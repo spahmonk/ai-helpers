@@ -9,7 +9,22 @@ NC='\033[0m' # No Color
 
 # Configuration
 REPO="spahmonk/ai-helpers"
-VERSION="${CTX_LITE_VERSION:-1.0.0}"
+
+# Auto-detect latest release version (can be overridden with CTX_LITE_VERSION env var)
+detect_version() {
+    if [ -n "${CTX_LITE_VERSION:-}" ]; then
+        echo "$CTX_LITE_VERSION"
+        return
+    fi
+    local v
+    v=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
+        | grep -o '"tag_name": *"v[^"]*"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
+    if [ -z "$v" ]; then
+        echo -e "${RED}✗ Could not detect latest version. Set CTX_LITE_VERSION to override.${NC}" >&2
+        exit 1
+    fi
+    echo "$v"
+}
 INSTALL_DIR="${CTX_LITE_INSTALL_DIR:-/usr/local/bin}"
 
 # Detect OS and architecture
@@ -41,6 +56,7 @@ detect_platform() {
 }
 
 main() {
+    VERSION=$(detect_version)
     echo -e "${YELLOW}⚙️  ctx-lite installer v$VERSION${NC}"
     echo ""
     
