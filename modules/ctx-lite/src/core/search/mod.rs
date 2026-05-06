@@ -175,7 +175,11 @@ mod tests {
 
     fn setup_test_dir() -> (TempDir, PathBuf) {
         let temp = TempDir::new().expect("failed to create temp dir");
-        let root = temp.path().to_path_buf();
+        // Canonicalize to handle symlinks on macOS (e.g., /tmp -> /private/tmp)
+        let root = temp
+            .path()
+            .canonicalize()
+            .expect("failed to canonicalize temp dir");
 
         // Create test files
         let file1 = root.join("test1.txt");
