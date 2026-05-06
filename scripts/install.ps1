@@ -19,9 +19,18 @@ function Write-Err($Message)     { Write-Host "[!!] $Message" -ForegroundColor R
 function Write-Info($Message)    { Write-Host "[..] $Message" -ForegroundColor Yellow }
 
 function Get-LatestVersion {
+    $api = "https://api.github.com/repos/spahmonk/ai-helpers/releases/latest"
+    # Try Invoke-RestMethod first (PowerShell 3+, handles User-Agent automatically)
     try {
-        $api = "https://api.github.com/repos/spahmonk/ai-helpers/releases/latest"
-        $resp = (New-Object System.Net.WebClient).DownloadString($api)
+        $release = Invoke-RestMethod -Uri $api -UseBasicParsing -ErrorAction Stop
+        $tag = $release.tag_name
+        if ($tag) { return ($tag -replace '^v', '') }
+    } catch {}
+    # Fallback: WebClient with explicit User-Agent (required by GitHub API)
+    try {
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("User-Agent", "ctx-lite-installer/1.0")
+        $resp = $wc.DownloadString($api)
         if ($resp -match '"tag_name"\s*:\s*"v?([^"]+)"') { return $Matches[1] }
     } catch {}
     return $null
