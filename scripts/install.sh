@@ -27,6 +27,12 @@ detect_version() {
 }
 INSTALL_DIR="${CTX_LITE_INSTALL_DIR:-/usr/local/bin}"
 
+# NOTE: When using pipe syntax (curl | bash), env vars must be passed to bash, not curl:
+#   curl -fsSL .../install.sh | CTX_LITE_INSTALL_DIR=$HOME/.local/bin bash
+# Or export first:
+#   export CTX_LITE_INSTALL_DIR=$HOME/.local/bin
+#   curl -fsSL .../install.sh | bash
+
 # Detect OS and architecture
 detect_platform() {
     local os kernel arch

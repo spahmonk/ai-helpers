@@ -514,6 +514,10 @@ where
                                     "type": "string",
                                     "description": "Search pattern - supports regex. Search for: function names, error messages, patterns, variables"
                                 },
+                                "path": {
+                                    "type": "string",
+                                    "description": "Optional directory path to restrict the search scope (defaults to project root)"
+                                },
                                 "limit": {
                                     "type": "integer",
                                     "description": "Max results to return (default: 50)"
@@ -673,8 +677,13 @@ where
             .and_then(|v| v.as_u64())
             .map(|v| v as usize);
 
-        let request = SearchRequest { query, limit };
-        let normalized = request.normalize(&self.config);
+        let path = arguments
+            .get("path")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let request = SearchRequest { query, limit, path };
+        let normalized = request.normalize(&self.config).map_err(|e| e.reason)?;
         let response = self.search.search(normalized).map_err(|e| e.message)?;
 
         let hits: Vec<Value> = response
