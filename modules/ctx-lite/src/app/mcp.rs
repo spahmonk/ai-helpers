@@ -8,9 +8,19 @@ use crate::app::contracts::{
 use crate::core::capabilities::ShellCapabilityId;
 use crate::core::config::AppConfig;
 
+#[derive(Clone, Copy)]
 enum MessageFormat {
     ContentLength,
     JsonLine,
+}
+
+enum ReadMessageError {
+    Io(io::Error),
+    Parse {
+        format: MessageFormat,
+        message: String,
+        recoverable: bool,
+    },
 }
 
 pub struct McpAdapter<Read, Tree, Search, Shell, Doctor>
@@ -61,7 +71,25 @@ where
         let mut reader = BufReader::new(stdin.lock());
         let mut writer = stdout.lock();
 
-        while let Some((request, format)) = Self::read_message(&mut reader)? {
+        loop {
+            let (request, format) = match Self::read_message(&mut reader) {
+                Ok(Some(message)) => message,
+                Ok(None) => break,
+                Err(ReadMessageError::Parse {
+                    format,
+                    message,
+                    recoverable,
+                }) => {
+                    let response = Self::error_response(None, -32700, message);
+                    Self::write_message(&mut writer, &response, format)?;
+                    if recoverable {
+                        continue;
+                    }
+                    break;
+                }
+                Err(ReadMessageError::Io(error)) => return Err(Box::new(error)),
+            };
+
             if request.get("id").is_none() {
                 continue;
             }
@@ -103,10 +131,12 @@ where
 
     fn read_message<R: BufRead>(
         reader: &mut R,
-    ) -> Result<Option<(Value, MessageFormat)>, Box<dyn std::error::Error>> {
+    ) -> Result<Option<(Value, MessageFormat)>, ReadMessageError> {
         loop {
             let mut first_line = String::new();
-            let bytes = reader.read_line(&mut first_line)?;
+            let bytes = reader
+                .read_line(&mut first_line)
+                .map_err(ReadMessageError::Io)?;
 
             if bytes == 0 {
                 return Ok(None);
@@ -118,10 +148,14 @@ where
             }
 
             if trimmed.starts_with('{') {
-                return Ok(Some((
-                    serde_json::from_str(trimmed)?,
-                    MessageFormat::JsonLine,
-                )));
+                let request =
+                    serde_json::from_str(trimmed).map_err(|error| ReadMessageError::Parse {
+                        format: MessageFormat::JsonLine,
+                        message: error.to_string(),
+                        recoverable: true,
+                    })?;
+
+                return Ok(Some((request, MessageFormat::JsonLine)));
             }
 
             let mut content_length = None;
@@ -129,7 +163,7 @@ where
 
             loop {
                 let mut line = String::new();
-                let bytes = reader.read_line(&mut line)?;
+                let bytes = reader.read_line(&mut line).map_err(ReadMessageError::Io)?;
 
                 if bytes == 0 {
                     return Ok(None);
@@ -142,24 +176,37 @@ where
                 Self::capture_content_length(&line, &mut content_length)?;
             }
 
-            let content_length = content_length.ok_or("Missing Content-Length header")?;
+            let content_length = content_length.ok_or_else(|| ReadMessageError::Parse {
+                format: MessageFormat::ContentLength,
+                message: "Missing Content-Length header".to_string(),
+                recoverable: false,
+            })?;
             let mut body = vec![0_u8; content_length];
-            reader.read_exact(&mut body)?;
+            reader.read_exact(&mut body).map_err(ReadMessageError::Io)?;
+            let request =
+                serde_json::from_slice(&body).map_err(|error| ReadMessageError::Parse {
+                    format: MessageFormat::ContentLength,
+                    message: error.to_string(),
+                    recoverable: true,
+                })?;
 
-            return Ok(Some((
-                serde_json::from_slice(&body)?,
-                MessageFormat::ContentLength,
-            )));
+            return Ok(Some((request, MessageFormat::ContentLength)));
         }
     }
 
     fn capture_content_length(
         line: &str,
         content_length: &mut Option<usize>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), ReadMessageError> {
         if let Some((name, value)) = line.split_once(':') {
             if name.trim().eq_ignore_ascii_case("Content-Length") {
-                *content_length = Some(value.trim().parse::<usize>()?);
+                *content_length = Some(value.trim().parse::<usize>().map_err(|error| {
+                    ReadMessageError::Parse {
+                        format: MessageFormat::ContentLength,
+                        message: error.to_string(),
+                        recoverable: false,
+                    }
+                })?);
             }
         }
 
@@ -204,19 +251,14 @@ where
     }
 
     fn error_response(id: Option<Value>, code: i64, message: String) -> Value {
-        let mut response = json!({
+        json!({
             "jsonrpc": "2.0",
+            "id": id.unwrap_or(Value::Null),
             "error": {
                 "code": code,
                 "message": message
             }
-        });
-
-        if let (Some(id), Some(object)) = (id, response.as_object_mut()) {
-            object.insert("id".to_string(), id);
-        }
-
-        response
+        })
     }
 
     fn handle_initialize(&self, request: &Value) -> Result<Value, Box<dyn std::error::Error>> {

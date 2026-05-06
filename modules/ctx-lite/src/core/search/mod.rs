@@ -328,6 +328,33 @@ mod tests {
     }
 
     #[test]
+    fn search_falls_back_to_literal_matching_for_invalid_regex() {
+        let (_temp, root) = setup_test_dir();
+        let jail = PathJail::from_config(&AppConfig {
+            project_root: root.clone(),
+            allowed_roots: vec![root.clone()],
+            ..Default::default()
+        })
+        .expect("failed to create jail");
+
+        let literal_path = root.join("literal.txt");
+        let mut file = File::create(&literal_path).expect("failed to create literal file");
+        writeln!(file, "literal [ bracket").expect("failed to write literal file");
+
+        let service = SearchService::new(jail);
+        let request = SearchRequestNormalized {
+            query: "[".to_string(),
+            limit: 100,
+        };
+
+        let response = service
+            .search(request)
+            .expect("invalid regex should fall back to literal search");
+
+        assert!(response.hits.iter().any(|hit| hit.line.contains('[')));
+    }
+
+    #[test]
     fn search_returns_stable_response_format() {
         let (_temp, root) = setup_test_dir();
         let jail = PathJail::from_config(&AppConfig {

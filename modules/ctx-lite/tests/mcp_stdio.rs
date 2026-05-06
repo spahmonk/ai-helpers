@@ -120,6 +120,28 @@ fn send_request_as_json_line(child: &mut Child, request: Value) {
     stdin.flush().expect("failed to flush request");
 }
 
+fn send_raw_json_line(child: &mut Child, line: &str) {
+    let stdin = child.stdin.as_mut().expect("missing stdin");
+    stdin
+        .write_all(line.as_bytes())
+        .expect("failed to write raw line");
+    stdin.write_all(b"\n").expect("failed to write newline");
+    stdin.flush().expect("failed to flush request");
+}
+
+fn send_raw_content_length_message(child: &mut Child, body: &[u8]) {
+    let stdin = child.stdin.as_mut().expect("missing stdin");
+    write!(stdin, "Content-Length: {}\r\n\r\n", body.len()).expect("failed to write header");
+    stdin.write_all(body).expect("failed to write raw body");
+    stdin.flush().expect("failed to flush request");
+}
+
+fn send_raw_bytes(child: &mut Child, bytes: &[u8]) {
+    let stdin = child.stdin.as_mut().expect("missing stdin");
+    stdin.write_all(bytes).expect("failed to write raw bytes");
+    stdin.flush().expect("failed to flush request");
+}
+
 fn stop_child(child: &mut Child) {
     let _ = child.kill();
     let _ = child.wait();
@@ -138,6 +160,21 @@ fn read_stdout_line(child: &mut Child) -> Receiver<String> {
     });
 
     receiver
+}
+
+fn wait_for_exit(child: &mut Child) -> std::process::ExitStatus {
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    loop {
+        if let Some(status) = child.try_wait().expect("failed to poll child status") {
+            return status;
+        }
+
+        if std::time::Instant::now() >= deadline {
+            panic!("expected child process to exit");
+        }
+
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 #[test]
@@ -325,4 +362,110 @@ fn mcp_server_returns_error_and_continues_session_on_unknown_method() {
 
     assert_eq!(ok_payload["id"], 2);
     assert!(ok_payload["result"]["tools"].is_array());
+}
+
+#[test]
+fn mcp_server_returns_parse_error_for_invalid_json_line_and_keeps_session_alive() {
+    let (mut child, responses) = spawn_mcp_server();
+
+    send_raw_json_line(&mut child, "{invalid json}");
+
+    let error_response = responses
+        .recv_timeout(Duration::from_secs(2))
+        .expect("expected parse error response for malformed json line");
+
+    send_request_as_json_line(
+        &mut child,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {}
+        }),
+    );
+
+    let initialize_response = responses
+        .recv_timeout(Duration::from_secs(2))
+        .expect("expected initialize response after malformed json line");
+
+    stop_child(&mut child);
+
+    let error_payload: Value =
+        serde_json::from_str(&error_response).expect("parse error response should be json");
+    let initialize_payload: Value =
+        serde_json::from_str(&initialize_response).expect("initialize response should be json");
+
+    assert_eq!(error_payload["jsonrpc"], "2.0");
+    assert_eq!(error_payload["error"]["code"], -32700);
+    assert_eq!(error_payload.get("id"), Some(&Value::Null));
+    assert!(error_payload["error"]["message"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("key must be a string"));
+
+    assert_eq!(initialize_payload["jsonrpc"], "2.0");
+    assert_eq!(initialize_payload["id"], 1);
+}
+
+#[test]
+fn mcp_server_returns_parse_error_for_invalid_content_length_body_and_keeps_session_alive() {
+    let (mut child, responses) = spawn_mcp_server();
+
+    send_raw_content_length_message(&mut child, br#"{invalid json}"#);
+
+    let error_response = responses
+        .recv_timeout(Duration::from_secs(2))
+        .expect("expected parse error response for malformed content-length body");
+
+    send_request(
+        &mut child,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "initialize",
+            "params": {}
+        }),
+    );
+
+    let initialize_response = responses
+        .recv_timeout(Duration::from_secs(2))
+        .expect("expected initialize response after malformed content-length body");
+
+    stop_child(&mut child);
+
+    let error_payload: Value =
+        serde_json::from_str(&error_response).expect("parse error response should be json");
+    let initialize_payload: Value =
+        serde_json::from_str(&initialize_response).expect("initialize response should be json");
+
+    assert_eq!(error_payload["jsonrpc"], "2.0");
+    assert_eq!(error_payload["error"]["code"], -32700);
+    assert!(error_payload.get("id").is_none() || error_payload["id"].is_null());
+
+    assert_eq!(initialize_payload["jsonrpc"], "2.0");
+    assert_eq!(initialize_payload["id"], 2);
+}
+
+#[test]
+fn mcp_server_exits_after_invalid_content_length_header_parse_error() {
+    let (mut child, responses) = spawn_mcp_server();
+
+    send_raw_bytes(
+        &mut child,
+        b"Content-Length: nope\r\n\r\n{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"initialize\",\"params\":{}}",
+    );
+
+    let error_response = responses
+        .recv_timeout(Duration::from_secs(2))
+        .expect("expected parse error response for malformed content-length header");
+
+    let error_payload: Value =
+        serde_json::from_str(&error_response).expect("parse error response should be json");
+
+    let status = wait_for_exit(&mut child);
+
+    assert_eq!(error_payload["jsonrpc"], "2.0");
+    assert_eq!(error_payload["error"]["code"], -32700);
+    assert_eq!(error_payload.get("id"), Some(&Value::Null));
+    assert!(status.success(), "server should shut down cleanly");
 }
