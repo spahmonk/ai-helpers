@@ -6,6 +6,8 @@
 #   iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.ps1'))
 
 $ErrorActionPreference = "Stop"
+# Enforce TLS 1.2 — required by GitHub; older Windows PowerShell defaults to TLS 1.0
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 # Install directory: env override -> LocalAppData (no admin needed) -> fallback
 if ($env:CTX_LITE_INSTALL_DIR) {
@@ -20,13 +22,13 @@ function Write-Info($Message)    { Write-Host "[..] $Message" -ForegroundColor Y
 
 function Get-LatestVersion {
     $api = "https://api.github.com/repos/spahmonk/ai-helpers/releases/latest"
-    # Try Invoke-RestMethod first (PowerShell 3+, handles User-Agent automatically)
+    # Invoke-RestMethod (PowerShell 3+) — note: -UseBasicParsing is for Invoke-WebRequest only
     try {
-        $release = Invoke-RestMethod -Uri $api -UseBasicParsing -ErrorAction Stop
+        $release = Invoke-RestMethod -Uri $api -ErrorAction Stop
         $tag = $release.tag_name
         if ($tag) { return ($tag -replace '^v', '') }
     } catch {}
-    # Fallback: WebClient with explicit User-Agent (required by GitHub API)
+    # Fallback: WebClient with User-Agent header (required by GitHub API)
     try {
         $wc = New-Object System.Net.WebClient
         $wc.Headers.Add("User-Agent", "ctx-lite-installer/1.0")
