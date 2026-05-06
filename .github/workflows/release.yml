@@ -82,7 +82,8 @@ jobs:
         run: |
           $version = "${{ github.ref }}".substring("refs/tags/v".length)
           $archive = "ctx-lite-${version}-${{ matrix.target }}.zip"
-          7z a $archive target/release/ctx-lite.exe
+          # Compress-Archive stores only the filename (no directory prefix), matching Unix tar layout
+          Compress-Archive -Path target\release\ctx-lite.exe -DestinationPath $archive -Force
           Get-Item $archive | Format-List Length
           Copy-Item $archive -Destination $env:GITHUB_WORKSPACE/
 

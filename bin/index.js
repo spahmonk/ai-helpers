@@ -88,6 +88,10 @@ async function downloadBinary(platformArch) {
       execFileSync('chmod', ['+x', binaryPath], { stdio: 'inherit' });
     }
 
+    if (!existsSync(binaryPath)) {
+      throw new Error(`Binary not found at ${binaryPath} after extraction — archive may be malformed.`);
+    }
+
     console.log(`✓ Downloaded and cached at ${binaryPath}`);
   } catch (error) {
     console.error(`✗ Failed to download binary from ${downloadUrl}`);

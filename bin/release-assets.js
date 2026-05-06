@@ -31,12 +31,15 @@ export function getTempArchiveName(platformArch) {
 
 export function getExtractionCommand(platformArch, archivePath, destinationDir) {
   if (platformArch.includes('windows')) {
+    // Use double-quoted paths (backtick escapes " in PowerShell); single quotes break if path contains '
+    const escapedArchive = archivePath.replace(/"/g, '`"');
+    const escapedDest = destinationDir.replace(/"/g, '`"');
     return {
       file: 'powershell',
       args: [
         '-NoProfile',
         '-Command',
-        `Expand-Archive -LiteralPath '${archivePath}' -DestinationPath '${destinationDir}' -Force`,
+        `Expand-Archive -LiteralPath "${escapedArchive}" -DestinationPath "${escapedDest}" -Force`,
       ],
     };
   }
