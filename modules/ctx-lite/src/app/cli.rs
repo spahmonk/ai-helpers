@@ -277,20 +277,29 @@ where
             0
         };
 
+        // Optional path argument follows query: search <query> [path]
+        let path = args.get(query_start + 1).cloned();
+
         let request = SearchRequest {
             query: args[query_start].clone(),
             limit: None,
+            path,
         };
 
-        let normalized = request.normalize(&self.config);
-        match self.search.search(normalized) {
-            Ok(response) => CliResult {
-                output: format_search_response(&response),
-                exit_code: 0,
+        match request.normalize(&self.config) {
+            Ok(normalized) => match self.search.search(normalized) {
+                Ok(response) => CliResult {
+                    output: format_search_response(&response),
+                    exit_code: 0,
+                },
+                Err(err) => CliResult {
+                    output: format!("Error: {}\n", err.message),
+                    exit_code: 2,
+                },
             },
             Err(err) => CliResult {
-                output: format!("Error: {}\n", err.message),
-                exit_code: 2,
+                output: format!("Error: {}\n", err.reason),
+                exit_code: 1,
             },
         }
     }
@@ -392,7 +401,7 @@ where
 
 fn help_text() -> String {
     format!(
-        "ctx-lite {}\n\nUsage: ctx-lite [GLOBAL_OPTIONS] <COMMAND> [OPTIONS] [ARGS]\n\nGlobal options:\n  --mcp                                  Run in MCP server mode (stdin/stdout)\n  --shell-profile <safe|balanced|dangerous>\n  --allow-capability <csv>\n  --deny-capability <csv>\n  --allow-command <pattern>              May be repeated\n  --help, -h                             Show this help message\n  --version, -v                          Show version\n\nCommands:\n  read <path>              Read file at path\n  tree [path]              List directory tree\n  search <query>           Search for text/regex\n  shell <cwd> <command>    Execute whitelisted command\n  doctor                   Run diagnostics\n  setup-mcp [POLICY_OPTS] Configure MCP for Claude Desktop, Copilot CLI\n",
+        "ctx-lite {}\n\nUsage: ctx-lite [GLOBAL_OPTIONS] <COMMAND> [OPTIONS] [ARGS]\n\nGlobal options:\n  --mcp                                  Run in MCP server mode (stdin/stdout)\n  --allow <path>                         Allow access to path (MCP mode, repeatable)\n  --shell-profile <safe|balanced|dangerous>\n  --allow-capability <csv>\n  --deny-capability <csv>\n  --allow-command <pattern>              May be repeated\n  --help, -h                             Show this help message\n  --version, -v                          Show version\n\nCommands:\n  read <path>              Read file at path\n  tree [path]              List directory tree\n  search <query> [path]    Search for text/regex (optional path scopes the search)\n  shell <cwd> <command>    Execute whitelisted command\n  doctor                   Run diagnostics\n  setup-mcp [POLICY_OPTS] Configure MCP for Claude Desktop, Copilot CLI\n",
         crate::version()
     )
 }

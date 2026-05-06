@@ -83,20 +83,24 @@ pub struct TreeResponse {
 pub struct SearchRequest {
     pub query: String,
     pub limit: Option<usize>,
+    /// Optional path to restrict the search scope (defaults to project root)
+    pub path: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SearchRequestNormalized {
     pub query: String,
     pub limit: usize,
+    pub path: PathBuf,
 }
 
 impl SearchRequest {
-    pub fn normalize(self, _config: &AppConfig) -> SearchRequestNormalized {
-        SearchRequestNormalized {
+    pub fn normalize(self, config: &AppConfig) -> Result<SearchRequestNormalized, ContractError> {
+        Ok(SearchRequestNormalized {
             query: self.query.trim().to_string(),
             limit: self.limit.unwrap_or(20).min(100),
-        }
+            path: normalize_optional_path(self.path.as_deref(), config)?,
+        })
     }
 }
 
@@ -523,8 +527,10 @@ mod tests {
         let search = SearchRequest {
             query: "  app   config\tquery  ".into(),
             limit: None,
+            path: None,
         }
-        .normalize(&config);
+        .normalize(&config)
+        .expect("normalization should succeed");
         assert_eq!(search.query, "app   config\tquery");
         assert_eq!(search.limit, 20);
     }

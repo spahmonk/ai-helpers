@@ -13,6 +13,12 @@
 curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.sh | bash
 ```
 
+**To install without sudo** (non-root install dir), pass the env variable to `bash`:
+```bash
+curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.sh \
+  | CTX_LITE_INSTALL_DIR=$HOME/.local/bin bash
+```
+
 ### Windows (PowerShell)
 ```powershell
 powershell -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.ps1'))"
@@ -49,8 +55,9 @@ ctx-lite read src/main.rs
 # Show directory tree with compression info
 ctx-lite tree ./src
 
-# Search for text or regex patterns
+# Search for text or regex patterns (optional path scopes the search)
 ctx-lite search "function_name"
+ctx-lite search "TODO" ./src
 
 # Run diagnostics
 ctx-lite doctor

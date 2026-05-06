@@ -32,8 +32,8 @@ impl SearchService {
 
         let mut hits = Vec::new();
 
-        // Search all files in the jail
-        for entry in self.list_files()? {
+        // Search all files rooted at request.path (jail-validated)
+        for entry in self.list_files(&request.path)? {
             if hits.len() >= request.limit {
                 break;
             }
@@ -75,10 +75,10 @@ impl SearchService {
         }
     }
 
-    /// List all files within the jail
-    fn list_files(&self) -> Result<Vec<PathBuf>, ServiceError> {
+    /// List all files within a subtree, validated against the jail
+    fn list_files(&self, root: &std::path::Path) -> Result<Vec<PathBuf>, ServiceError> {
         let mut files = Vec::new();
-        self.walk_directory(self.jail.project_root(), &mut files)?;
+        self.walk_directory(root, &mut files)?;
         Ok(files)
     }
 
@@ -206,6 +206,7 @@ mod tests {
         let request = SearchRequestNormalized {
             query: "hello".to_string(),
             limit: 100,
+            path: root.clone(),
         };
 
         let response = service.search(request).expect("search failed");
@@ -229,6 +230,7 @@ mod tests {
         let request = SearchRequestNormalized {
             query: "hello".to_string(),
             limit: 2,
+            path: root.clone(),
         };
 
         let response = service.search(request).expect("search failed");
@@ -250,6 +252,7 @@ mod tests {
         let request = SearchRequestNormalized {
             query: "foo bar".to_string(),
             limit: 100,
+            path: root.clone(),
         };
 
         let response = service.search(request).expect("search failed");
@@ -276,6 +279,7 @@ mod tests {
         let request = SearchRequestNormalized {
             query: "nonexistent_pattern_xyz".to_string(),
             limit: 100,
+            path: root.clone(),
         };
 
         let response = service.search(request).expect("search failed");
@@ -298,6 +302,7 @@ mod tests {
         let request = SearchRequestNormalized {
             query: "".to_string(),
             limit: 100,
+            path: root.clone(),
         };
 
         let result = service.search(request);
@@ -319,6 +324,7 @@ mod tests {
         let request = SearchRequestNormalized {
             query: "hello world".to_string(),
             limit: 100,
+            path: root.clone(),
         };
 
         let response = service.search(request).expect("search failed");
@@ -345,6 +351,7 @@ mod tests {
         let request = SearchRequestNormalized {
             query: "[".to_string(),
             limit: 100,
+            path: root.clone(),
         };
 
         let response = service
@@ -368,6 +375,7 @@ mod tests {
         let request = SearchRequestNormalized {
             query: "hello".to_string(),
             limit: 100,
+            path: root.clone(),
         };
 
         let response = service.search(request).expect("search failed");
@@ -406,6 +414,7 @@ mod tests {
         let request = SearchRequestNormalized {
             query: "should be found".to_string(),
             limit: 100,
+            path: root.clone(),
         };
 
         let response = service.search(request).expect("search failed");
@@ -416,5 +425,57 @@ mod tests {
         for hit in &response.hits {
             assert!(hit.path.starts_with(&root));
         }
+    }
+
+    #[test]
+    fn search_scopes_results_to_provided_path() {
+        let temp = TempDir::new().expect("failed to create temp dir");
+        let root = temp
+            .path()
+            .canonicalize()
+            .expect("failed to canonicalize root");
+
+        // Content only in root (NOT in subdir)
+        let root_file = root.join("root_only.txt");
+        let mut f = File::create(&root_file).expect("failed to create root file");
+        writeln!(f, "ROOT_UNIQUE_CONTENT").expect("failed to write");
+
+        // Create subdir with its own content
+        let subdir = root.join("subdir");
+        std::fs::create_dir(&subdir).expect("failed to create subdir");
+        let sub_file = subdir.join("sub.txt");
+        let mut f = File::create(&sub_file).expect("failed to create sub file");
+        writeln!(f, "SUB_CONTENT").expect("failed to write");
+
+        let jail = PathJail::from_config(&AppConfig {
+            project_root: root.clone(),
+            allowed_roots: vec![root.clone()],
+            ..Default::default()
+        })
+        .expect("failed to create jail");
+
+        let service = SearchService::new(jail);
+
+        // Search for ROOT_UNIQUE_CONTENT but scope to subdir — should find nothing
+        let request = SearchRequestNormalized {
+            query: "ROOT_UNIQUE_CONTENT".to_string(),
+            limit: 100,
+            path: subdir.clone(),
+        };
+        let response = service.search(request).expect("search failed");
+        assert!(
+            response.hits.is_empty(),
+            "search scoped to subdir must not return hits from root: {:?}",
+            response.hits
+        );
+
+        // Search in root — should find it
+        let request_root = SearchRequestNormalized {
+            query: "ROOT_UNIQUE_CONTENT".to_string(),
+            limit: 100,
+            path: root.clone(),
+        };
+        let response_root = service.search(request_root).expect("search failed");
+        assert!(!response_root.hits.is_empty(), "search from root should find ROOT_UNIQUE_CONTENT");
     }
 }
