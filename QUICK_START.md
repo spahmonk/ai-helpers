@@ -53,8 +53,51 @@ ctx-lite doctor
 ## 📚 Что дальше?
 
 - **Базовые примеры**: `ctx-lite --help`
-- **Детальная документация**: смотри [INSTALL.md](docs/INSTALL.md)
+- **Детальная документация**: смотри [README](README.md) и [MCP Integration](MCP_INTEGRATION.md)
+- **Удаление**: смотри [Uninstall / Cleanup](#4️⃣-удаление-и-очистка)
 - **Проблемы при установке?** → смотри [Troubleshooting](#troubleshooting) ниже
+
+## 4️⃣ Удаление и очистка
+
+### Удалить установленный бинарник
+
+**Linux/macOS (install.sh):**
+```bash
+sudo rm -f /usr/local/bin/ctx-lite
+```
+
+Если ставил через `CTX_LITE_INSTALL_DIR`, удаляй `ctx-lite` из этого каталога.
+
+**Windows (install.ps1):**
+```powershell
+Remove-Item "$env:ProgramFiles\ctx-lite" -Recurse -Force
+```
+
+После этого при необходимости убери `%ProgramFiles%\ctx-lite` из **User PATH**, если он там остался.
+
+**npm:**
+```bash
+npm uninstall -g @spahmonk/ctx-lite
+```
+
+### Полная очистка локальных данных
+
+Если хочешь удалить и локальные данные/кэш:
+
+**Linux/macOS:**
+```bash
+rm -rf ~/.ctx-lite ~/.ctx-lite-cache
+```
+
+**Windows:**
+```powershell
+Remove-Item "$HOME\.ctx-lite","$HOME\.ctx-lite-cache" -Recurse -Force -ErrorAction SilentlyContinue
+```
+
+### Что удалять не нужно
+
+- `npx @spahmonk/ctx-lite` обычно не требует отдельного uninstall
+- временные файлы инсталляторов удаляются самими скриптами
 
 ## 🆘 Troubleshooting
 

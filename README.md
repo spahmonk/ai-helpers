@@ -28,7 +28,15 @@ npm install -g @spahmonk/ctx-lite
 ctx-lite --version  # Should print: ctx-lite 0.1.0
 ```
 
-**👉 [Full installation guide →](QUICK_START.md)**
+### Uninstall
+If you installed via the shell or PowerShell script, remove the installed binary and optional local data:
+
+- **Linux/macOS:** `sudo rm -f /usr/local/bin/ctx-lite`
+- **Windows:** remove `%ProgramFiles%\\ctx-lite`
+- **npm:** `npm uninstall -g @spahmonk/ctx-lite`
+- **Optional cleanup:** remove `~/.ctx-lite` and `~/.ctx-lite-cache`
+
+**👉 [Full installation guide, uninstall, and troubleshooting →](QUICK_START.md)**
 
 ---
 
@@ -107,7 +115,7 @@ Use `ctx-lite doctor` to inspect the effective policy seen by the runtime.
 
 ## 📚 Documentation
 
-- **[Quick Start](QUICK_START.md)** - Get started in 3 minutes
+- **[Quick Start](QUICK_START.md)** - Get started in 3 minutes, including uninstall and cleanup
 - **[MCP Integration](MCP_INTEGRATION.md)** - Profiles, capability IDs, setup examples, and exact shell support
 - **[Module Details](modules/ctx-lite/README.md)** - ctx-lite specifics
 
