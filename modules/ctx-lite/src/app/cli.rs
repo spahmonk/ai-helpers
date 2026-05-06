@@ -427,13 +427,17 @@ fn format_tree_response(response: &crate::app::contracts::TreeResponse) -> Strin
 
 fn format_search_response(response: &crate::app::contracts::SearchResponse) -> String {
     let mut output = format!("Search results for: {}\n", response.query);
-    for hit in &response.hits {
-        output.push_str(&format!(
-            "{}:{}: {}\n",
-            hit.path.display(),
-            hit.line_number,
-            hit.line
-        ));
+    if response.hits.is_empty() {
+        output.push_str("No results found.\n");
+    } else {
+        for hit in &response.hits {
+            output.push_str(&format!(
+                "{}:{}: {}\n",
+                hit.path.display(),
+                hit.line_number,
+                hit.line
+            ));
+        }
     }
     output
 }
