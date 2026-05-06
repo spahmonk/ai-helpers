@@ -480,6 +480,9 @@ mod tests {
             path: root.clone(),
         };
         let response_root = service.search(request_root).expect("search failed");
-        assert!(!response_root.hits.is_empty(), "search from root should find ROOT_UNIQUE_CONTENT");
+        assert!(
+            !response_root.hits.is_empty(),
+            "search from root should find ROOT_UNIQUE_CONTENT"
+        );
     }
 }
