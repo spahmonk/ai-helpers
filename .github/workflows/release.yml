@@ -19,6 +19,12 @@ jobs:
             artifact_name: ctx-lite
             artifact_ext: tar.gz
 
+          - os: Linux ARM64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            artifact_name: ctx-lite
+            artifact_ext: tar.gz
+
           - os: macOS
             runner: macos-latest
             target: x86_64-apple-darwin

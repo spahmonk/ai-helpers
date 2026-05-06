@@ -52,7 +52,7 @@ fn smoke_cli_version_command() {
         output.contains("ctx-lite"),
         "version should mention binary name"
     );
-    assert!(output.contains("0.1"), "version should show version number");
+    assert!(output.contains("1.0"), "version should show version number");
 }
 
 #[test]

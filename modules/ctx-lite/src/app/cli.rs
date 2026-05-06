@@ -533,7 +533,7 @@ mod tests {
         let result = adapter.run(vec!["--version".to_string()]);
         assert_eq!(result.exit_code, 0);
         assert!(result.output.contains("ctx-lite"));
-        assert!(result.output.contains("0.1.0"));
+        assert!(result.output.contains(env!("CARGO_PKG_VERSION")));
     }
 
     #[test]
@@ -581,7 +581,7 @@ mod tests {
         let adapter = create_test_adapter();
         let result = adapter.run(vec!["-v".to_string()]);
         assert_eq!(result.exit_code, 0);
-        assert!(result.output.contains("0.1.0"));
+        assert!(result.output.contains(env!("CARGO_PKG_VERSION")));
     }
 
     // Tests for service error handling
