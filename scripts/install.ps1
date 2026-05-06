@@ -1,143 +1,134 @@
 # ctx-lite Windows Installer
 # Usage: powershell -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.ps1'))"
-
-param(
-    [string]$Version = "1.0.0",
-    [string]$InstallDir = "$env:ProgramFiles\ctx-lite"
-)
+#
+# Custom install directory (no admin required):
+#   $env:CTX_LITE_INSTALL_DIR = "$env:USERPROFILE\.local\bin"
+#   iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.ps1'))
 
 $ErrorActionPreference = "Stop"
 
-function Write-Success {
-    param([string]$Message)
-    Write-Host "✓ $Message" -ForegroundColor Green
+# Install directory: env override -> LocalAppData (no admin needed) -> fallback
+if ($env:CTX_LITE_INSTALL_DIR) {
+    $InstallDir = $env:CTX_LITE_INSTALL_DIR
+} else {
+    $InstallDir = "$env:LOCALAPPDATA\Programs\ctx-lite"
 }
 
-function Write-Error_ {
-    param([string]$Message)
-    Write-Host "✗ $Message" -ForegroundColor Red
-}
+function Write-Success($Message) { Write-Host "[OK] $Message" -ForegroundColor Green }
+function Write-Err($Message)     { Write-Host "[!!] $Message" -ForegroundColor Red }
+function Write-Info($Message)    { Write-Host "[..] $Message" -ForegroundColor Yellow }
 
-function Write-Info {
-    param([string]$Message)
-    Write-Host "⚙️  $Message" -ForegroundColor Yellow
+function Get-LatestVersion {
+    try {
+        $api = "https://api.github.com/repos/spahmonk/ai-helpers/releases/latest"
+        $resp = (New-Object System.Net.WebClient).DownloadString($api)
+        if ($resp -match '"tag_name"\s*:\s*"v?([^"]+)"') { return $Matches[1] }
+    } catch {}
+    return $null
 }
 
 function Detect-Architecture {
-    $arch = [Environment]::Is64BitProcess
-    if ($arch) {
-        return "x86_64-pc-windows-msvc"
-    } else {
-        Write-Error_ "32-bit Windows is not supported"
-        exit 1
-    }
+    # Use OS bitness, not process bitness (32-bit PS can run on 64-bit OS)
+    if ([Environment]::Is64BitOperatingSystem) { return "x86_64-pc-windows-msvc" }
+    Write-Err "32-bit Windows is not supported"
+    exit 1
 }
 
 function Main {
-    Write-Info "ctx-lite installer v$Version"
+    Write-Host "ctx-lite Windows Installer" -ForegroundColor Cyan
     Write-Host ""
-    
-    # Check prerequisites
-    Write-Info "Checking prerequisites..."
-    if (-not (Get-Command curl -ErrorAction SilentlyContinue)) {
-        Write-Error_ "curl is not available. Please install curl or use another method."
+
+    # Auto-detect latest version
+    Write-Info "Detecting latest version..."
+    $Version = Get-LatestVersion
+    if (-not $Version) {
+        Write-Err "Could not detect latest version from GitHub API."
+        Write-Err "Set CTX_LITE_VERSION env var to override, e.g.: `$env:CTX_LITE_VERSION = '1.0.7'"
         exit 1
     }
-    
-    # Detect platform
+    # Allow CTX_LITE_VERSION env override; strip leading 'v' if present
+    if ($env:CTX_LITE_VERSION) { $Version = $env:CTX_LITE_VERSION -replace '^v', '' }
+    Write-Success "Version: $Version"
+
     $Platform = Detect-Architecture
-    Write-Host "Detected platform: " -NoNewline
-    Write-Host "$Platform" -ForegroundColor Green
-    
-    # Create temp directory
-    $TempDir = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
-    Write-Host "Temp directory: $TempDir" -ForegroundColor Gray
-    
+    Write-Host "Platform: $Platform" -ForegroundColor Gray
+
+    # Temp directory
+    $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
+    New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
+
     # Download
     $DownloadUrl = "https://github.com/spahmonk/ai-helpers/releases/download/v$Version/ctx-lite-$Version-$Platform.zip"
     $ZipPath = "$TempDir\ctx-lite.zip"
-    
     Write-Info "Downloading ctx-lite $Version..."
-    Write-Host "URL: $DownloadUrl" -ForegroundColor Gray
-    
+    Write-Host "  $DownloadUrl" -ForegroundColor Gray
     try {
         (New-Object System.Net.WebClient).DownloadFile($DownloadUrl, $ZipPath)
     } catch {
-        Write-Error_ "Failed to download from: $DownloadUrl"
-        Write-Error_ $_.Exception.Message
-        Write-Host "Make sure version $Version is released on GitHub." -ForegroundColor Gray
+        Write-Err "Download failed: $($_.Exception.Message)"
+        Write-Host "  URL: $DownloadUrl" -ForegroundColor Gray
+        Remove-Item -Recurse -Force $TempDir -ErrorAction SilentlyContinue
         exit 1
     }
-    
     Write-Success "Downloaded"
-    
+
     # Extract
     Write-Info "Extracting..."
     Expand-Archive -Path $ZipPath -DestinationPath $TempDir -Force
     Write-Success "Extracted"
-    
+
     # Find binary
     $BinaryPath = $null
-    if (Test-Path "$TempDir\ctx-lite.exe") {
-        $BinaryPath = "$TempDir\ctx-lite.exe"
-    } elseif (Test-Path "$TempDir\bin\ctx-lite.exe") {
-        $BinaryPath = "$TempDir\bin\ctx-lite.exe"
-    }
-    
+    if (Test-Path "$TempDir\ctx-lite.exe")     { $BinaryPath = "$TempDir\ctx-lite.exe" }
+    elseif (Test-Path "$TempDir\bin\ctx-lite.exe") { $BinaryPath = "$TempDir\bin\ctx-lite.exe" }
     if (-not $BinaryPath) {
-        Write-Error_ "Binary not found in downloaded archive"
+        Write-Err "Binary not found in downloaded archive"
+        Remove-Item -Recurse -Force $TempDir -ErrorAction SilentlyContinue
         exit 1
     }
-    
-    # Create install directory if needed
+
+    # Install
     if (-not (Test-Path $InstallDir)) {
-        Write-Info "Creating installation directory: $InstallDir"
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
-    
-    # Copy binary
     Write-Info "Installing to $InstallDir..."
     Copy-Item -Path $BinaryPath -Destination "$InstallDir\ctx-lite.exe" -Force
-    Write-Success "Installed"
-    
-    # Add to PATH (current session)
+    Write-Success "Binary installed"
+
+    # Add to user PATH (single-line call — avoids iex multi-line parsing issues)
     $CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($CurrentPath -notlike "*$InstallDir*") {
         Write-Info "Adding to user PATH..."
-        [Environment]::SetEnvironmentVariable(
-            "Path",
-            "$CurrentPath;$InstallDir",
-            "User"
-        )
-        Write-Success "Added to PATH (restart terminal for changes to take effect)"
-        # Also add to current session
+        [Environment]::SetEnvironmentVariable("Path", "$CurrentPath;$InstallDir", "User")
         $env:Path += ";$InstallDir"
+        Write-Success "Added to PATH (open a new terminal for changes to take effect)"
     }
-    
-    # Verify installation
-    Write-Info "Verifying installation..."
+
+    # Verify
+    Write-Info "Verifying..."
     $ExePath = "$InstallDir\ctx-lite.exe"
     if (Test-Path $ExePath) {
         $VersionOutput = & $ExePath --version 2>$null
         if ($LASTEXITCODE -eq 0) {
             Write-Host ""
-            Write-Success "Successfully installed!"
-            Write-Host "  Location: $ExePath"
-            Write-Host "  Version: $VersionOutput"
+            Write-Success "ctx-lite installed successfully!"
+            Write-Host "  Location : $ExePath"
+            Write-Host "  Version  : $VersionOutput"
             Write-Host ""
-            Write-Host "You're all set! Try:" -ForegroundColor Green
+            Write-Host "Try it out:" -ForegroundColor Green
             Write-Host "  ctx-lite --help" -ForegroundColor Yellow
+            Write-Host "  ctx-lite tree ." -ForegroundColor Yellow
         } else {
-            Write-Error_ "Binary verification failed"
+            Write-Err "Binary verification failed"
             exit 1
         }
     } else {
-        Write-Error_ "Installation file not found at $ExePath"
+        Write-Err "Installation file not found at $ExePath"
         exit 1
     }
-    
+
     # Cleanup
-    Remove-Item -Recurse -Force $TempDir
+    Remove-Item -Recurse -Force $TempDir -ErrorAction SilentlyContinue
 }
 
 Main
