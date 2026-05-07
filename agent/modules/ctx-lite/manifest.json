@@ -54,7 +54,7 @@
       "all": "~/.cursor/mcp.json"
     },
     "windsurf": {
-      "all": "~/.windsurf/mcp.json"
+      "all": "~/.codeium/windsurf/mcp_config.json"
     }
   },
 

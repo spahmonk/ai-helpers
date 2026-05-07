@@ -1,0 +1,88 @@
+BASH INSTALLER AUDIT FINDINGS
+==============================
+
+CRITICAL SEVERITY
+-----------------
+
+1. Command Injection via Unquoted Variable in Trap
+   Impact: If $TEMP_DIR contains spaces or special characters, the trap command "rm -rf $TEMP_DIR" could execute arbitrary code or delete unintended files.
+   Evidence: Line "trap "rm -rf $TEMP_DIR" EXIT" - variable expansion happens inside double quotes without proper quoting of $TEMP_DIR itself.
+   Example: If TEMP_DIR="/tmp/foo; malicious-command;", the trap would execute the malicious command.
+
+2. No Integrity Verification (Checksum/Signature)
+   Impact: Downloaded binary has no cryptographic verification, allowing man-in-the-middle attacks or compromised CDN to inject malicious binaries.
+   Evidence: Lines "curl -fsSL "$DOWNLOAD_URL" -o "$TEMP_DIR/ctx-lite.tar.gz"" followed by immediate extraction with no checksum validation.
+   Context: Especially critical since script uses sudo to install system-wide.
+
+3. Silent Platform Detection Failures
+   Impact: Unsupported platforms exit with status 1 but no error message, making debugging impossible. Could install wrong binary if uname behaves unexpectedly.
+   Evidence: detect_platform() has multiple "*) exit 1;;" cases with no error output. User sees no explanation why installation failed.
+
+
+HIGH SEVERITY
+-------------
+
+4. Unbounded Network Operations
+   Impact: curl has no timeout, script hangs indefinitely on slow/stalled connections. User has no way to know if script is working or hung.
+   Evidence: Both curl calls use "-fsSL" but neither specifies "--max-time" or "--connect-timeout".
+
+5. Fragile JSON Parsing with grep/sed
+   Impact: GitHub API response format changes or unexpected JSON structure breaks version detection silently or extracts wrong version.
+   Evidence: 'grep -o '"tag_name": *"v[^"]*"' | head -1 | sed ...' assumes specific spacing, quote style, and field order in JSON.
+   Example: Fails if GitHub adds newlines, changes whitespace, or if other fields contain similar patterns.
+
+6. Tar Extraction Without Validation
+   Impact: Corrupted download or wrong content-type extracts invalid data. tar command succeeds even if archive is truncated or malformed.
+   Evidence: "tar -xzf "$TEMP_DIR/ctx-lite.tar.gz" -C "$TEMP_DIR"" with no prior check that downloaded file is valid gzip/tar.
+   Context: Curl's -f flag only checks HTTP status, not content integrity.
+
+7. Directory Writability Check Insufficient
+   Impact: "[ ! -w "$INSTALL_DIR" ]" may incorrectly report directory as writable when file creation would actually fail (e.g., due to filesystem mount options, ACLs, or SELinux).
+   Evidence: Line "if [ ! -w "$INSTALL_DIR" ]; then" - test checks directory permission bits only, not effective write access.
+   Result: Script attempts non-sudo copy, fails, and exits (due to set -e) without trying sudo fallback.
+
+
+MEDIUM SEVERITY
+---------------
+
+8. No Version Format Validation
+   Impact: Malformed version string from API could create invalid download URL or unexpected behavior in string interpolation.
+   Evidence: detect_version() echoes "$v" directly without validating format (e.g., semantic version pattern, no special characters).
+   Example: If API returns version with spaces or shell metacharacters, could cause downstream issues in URL construction.
+
+9. Installation Verification Insufficient
+   Impact: "command -v ctx-lite" only checks if any executable named ctx-lite exists in PATH, not if it's the correct version or even the binary just installed.
+   Evidence: Lines "if command -v ctx-lite &> /dev/null; then echo "Successfully installed!"" 
+   Scenario: Pre-existing old/broken ctx-lite in ~/.local/bin shadows new installation in /usr/local/bin, script reports success incorrectly.
+
+10. Unused Function Arguments
+    Impact: "main "$@"" passes all script arguments to main() but function never uses them, indicating incomplete implementation or dead code.
+    Evidence: Last line "main "$@"" but main() has no parameter handling logic.
+    Confusion: Users might expect to pass flags/options that are silently ignored.
+
+11. mktemp Without Error Handling
+    Impact: While rare, if mktemp fails (disk full, /tmp not writable), $TEMP_DIR is empty but script continues. Trap would then execute "rm -rf " which is dangerous.
+    Evidence: "TEMP_DIR=$(mktemp -d)" with no check if $TEMP_DIR is non-empty before use.
+    Note: set -e doesn't catch this if mktemp succeeds but returns empty string in edge cases.
+
+
+LOW SEVERITY
+------------
+
+12. Inconsistent Error Context
+    Impact: Error message "Binary not found" doesn't specify what paths were checked, making debugging harder.
+    Evidence: "else echo "Binary not found"; exit 1; fi" - no indication that it checked both "$TEMP_DIR/ctx-lite" and "$TEMP_DIR/bin/ctx-lite".
+
+13. Error Message Ordering
+    Impact: Final error says "Installation verification failed. Make sure $INSTALL_DIR is in your PATH" but real issue might be binary corruption, wrong PATH, or shell rehashing needed.
+    Evidence: Verification failure message assumes PATH issue when other causes are possible (verification happens after copy, so permissions unlikely).
+
+14. No curl Response Validation
+    Impact: GitHub API returns 200 OK with error JSON (e.g., rate limit response), curl succeeds but grep finds no tag_name, version detection fails.
+    Evidence: curl with -f fails on HTTP errors but can't detect JSON error responses with 200 status.
+
+15. Version Detection Fallback Logic Unclear
+    Impact: If CTX_LITE_VERSION is set but empty string, condition "[ -n "${CTX_LITE_VERSION:-}" ]" is false, so falls through to API call. Inconsistent with likely user intent.
+    Evidence: "if [ -n "${CTX_LITE_VERSION:-}" ]; then echo "$CTX_LITE_VERSION"; return; fi"
+    Expected: Empty string should probably either be error or not override API detection.
+

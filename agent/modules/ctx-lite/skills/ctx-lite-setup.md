@@ -34,7 +34,7 @@ ctx-lite is a fast context extractor that acts as an MCP server. It gives AI age
    - Copilot CLI: config path is `~/.copilot/lsp-config.json`
    - Claude Desktop: config path is `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
    - Cursor: config path is `~/.cursor/mcp.json`
-   - Windsurf: config path is `~/.windsurf/mcp.json`
+   - Windsurf: config path is `~/.codeium/windsurf/mcp_config.json`
    - If you cannot detect, ask the user: *"Which AI tool are you configuring ctx-lite for? (Claude Desktop / Copilot CLI / Cursor / Windsurf)"*
 
 ### Phase 2 — Check Existing Installation
@@ -71,27 +71,13 @@ Ask the user:
 > - **safe** — Read-only inspection: git status/diff/log, docker logs, run tests. No side effects. *(Recommended for most users)*
 > - **balanced** — Everything in safe, plus build and lint commands (cargo build, npm run build, cargo clippy, etc.)
 > - **dangerous** — Everything in balanced, plus side-effectful commands like docker run, npm install, cargo run. Use only if you need it.
-> - **none** — No shell access at all. ctx-lite can only read files and search.
 >
 > *What's your preference?*"
 
 Wait for the user's answer. Store the chosen profile as `SHELL_PROFILE`.
-- If the user says "none", omit `--shell-profile` arg and add `--no-shell` to args instead.
 - If the user says nothing or "default", use `safe`.
 
-**Question 2 — Directory Restrictions**
-
-Ask the user:
-
-> *"By default, ctx-lite can access all directories on your system. Do you want to restrict access to certain directories? For example, you might want to block access to your home directory's private folders.*
->
-> *Reply with a list of directories to block (e.g., ~/secrets, ~/Documents/private), or say 'no restrictions' to keep full access."*
-
-Wait for the user's answer. Store any blocked paths as `DENIED_ROOTS`.
-- If they say "no restrictions" or similar, leave unrestricted.
-- If they provide paths, add `--deny-root <path>` args for each path.
-
-**Question 3 — Confirm Config**
+**Question 2 — Confirm Config**
 
 Build the config snippet based on the platform detected in Phase 1:
 
@@ -123,7 +109,7 @@ Build the config snippet based on the platform detected in Phase 1:
 }
 ```
 
-**Cursor / Windsurf** (merges into `mcpServers` in `~/.cursor/mcp.json` or `~/.windsurf/mcp.json`):
+**Cursor / Windsurf** (merges into `mcpServers` in `~/.cursor/mcp.json` or `~/.codeium/windsurf/mcp_config.json`):
 ```json
 {
   "mcpServers": {
@@ -135,9 +121,7 @@ Build the config snippet based on the platform detected in Phase 1:
 }
 ```
 
-Replace `<SHELL_PROFILE>` with the value from Question 1. If profile is "none", replace `--shell-profile <SHELL_PROFILE>` with `--no-shell`.
-
-If the user specified `DENIED_ROOTS`, add `--deny-root <path>` entries to `args`.
+Replace `<SHELL_PROFILE>` with the value from Question 1.
 
 Show the user:
 > *"Here is the configuration I will write to `<CONFIG_FILE_PATH>`:"*
