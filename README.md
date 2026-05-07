@@ -120,11 +120,27 @@ Use `ctx-lite doctor` to inspect the effective policy seen by the runtime.
 
 ---
 
+## 🤖 For AI Agents
+
+If a user asked you to install or configure ctx-lite, read **[AGENT.md](AGENT.md)** first.
+
+It provides the universal 5-step integration protocol:
+1. Read `manifest.json` for this module
+2. Check if already installed
+3. Run the installer
+4. Run the `ctx-lite-setup` skill — it asks the user 3 questions and writes the MCP config with their consent
+5. Register `ctx-lite-usage` skill for optimal token-efficient workflows
+
+**→ [AGENT.md](AGENT.md)** — complete agent integration guide
+
+---
+
 ## 📚 Documentation
 
 - **[Quick Start](QUICK_START.md)** - Get started in 3 minutes, including uninstall and cleanup
 - **[MCP Integration](MCP_INTEGRATION.md)** - Profiles, capability IDs, setup examples, and exact shell support
 - **[Module Details](modules/ctx-lite/README.md)** - ctx-lite specifics
+- **[Agent Integration](AGENT.md)** - For AI agents installing ctx-lite on behalf of users
 
 ---
 

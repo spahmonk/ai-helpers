@@ -1,0 +1,75 @@
+{
+  "name": "ctx-lite",
+  "version": "1.0.7",
+  "description": "Fast context extractor for AI coding — 87% compression, MCP server, cross-platform (Linux/macOS/Windows)",
+  "homepage": "https://github.com/spahmonk/ai-helpers",
+
+  "install": {
+    "linux":   "curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.sh | bash",
+    "macos":   "curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.sh | bash",
+    "windows": "powershell -Command \"iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.ps1'))\"",
+    "npm":     "npm install -g @spahmonk/ctx-lite"
+  },
+
+  "verify": "ctx-lite --version",
+
+  "mcp_config": {
+    "claude_desktop": {
+      "command": "npx",
+      "args": ["-y", "@spahmonk/ctx-lite", "--mcp", "--shell-profile", "{{shell_profile}}"]
+    },
+    "copilot_cli": {
+      "command": "ctx-lite",
+      "args": ["--shell-profile", "{{shell_profile}}"],
+      "fileExtensions": {
+        ".rs": "rust",
+        ".ts": "typescript",
+        ".tsx": "typescript",
+        ".js": "javascript",
+        ".jsx": "javascript",
+        ".py": "python",
+        ".go": "go"
+      }
+    },
+    "cursor": {
+      "command": "npx",
+      "args": ["-y", "@spahmonk/ctx-lite", "--mcp", "--shell-profile", "{{shell_profile}}"]
+    },
+    "windsurf": {
+      "command": "npx",
+      "args": ["-y", "@spahmonk/ctx-lite", "--mcp", "--shell-profile", "{{shell_profile}}"]
+    }
+  },
+
+  "config_paths": {
+    "claude_desktop": {
+      "macos":   "~/Library/Application Support/Claude/claude_desktop_config.json",
+      "windows": "%APPDATA%\\Claude\\claude_desktop_config.json",
+      "linux":   "~/.config/Claude/claude_desktop_config.json"
+    },
+    "copilot_cli": {
+      "all": "~/.copilot/lsp-config.json"
+    },
+    "cursor": {
+      "all": "~/.cursor/mcp.json"
+    },
+    "windsurf": {
+      "all": "~/.windsurf/mcp.json"
+    }
+  },
+
+  "skills": [
+    {
+      "id":   "ctx-lite-setup",
+      "name": "ctx-lite Setup",
+      "url":  "https://raw.githubusercontent.com/spahmonk/ai-helpers/main/agent/modules/ctx-lite/skills/ctx-lite-setup.md",
+      "type": "setup"
+    },
+    {
+      "id":   "ctx-lite-usage",
+      "name": "ctx-lite Usage Optimization",
+      "url":  "https://raw.githubusercontent.com/spahmonk/ai-helpers/main/agent/modules/ctx-lite/skills/ctx-lite-usage.md",
+      "type": "usage"
+    }
+  ]
+}
