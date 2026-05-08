@@ -10,6 +10,18 @@ use ctx_lite::core::security::path_jail::{PathJail, PathJailErrorKind};
 
 static NEXT_FIXTURE_ID: AtomicUsize = AtomicUsize::new(0);
 
+/// Strip the Windows extended-length path prefix (`\\?\`) so that paths
+/// from `fs::canonicalize()` compare correctly against paths returned by
+/// `PathJail`, which always strips this prefix internally.
+fn strip_unc_prefix(p: PathBuf) -> PathBuf {
+    let s = p.to_string_lossy();
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+        PathBuf::from(rest)
+    } else {
+        p
+    }
+}
+
 #[test]
 fn path_jail_rejects_runtime_root_escape() {
     let fixture = FixtureRepo::new("root-escape");
@@ -89,8 +101,10 @@ fn file_reader_reads_files_inside_fixture_repo() {
 
     assert_eq!(
         response.path,
-        fs::canonicalize(fixture.repo_root.join("README.md"))
-            .expect("fixture readme should canonicalize")
+        strip_unc_prefix(
+            fs::canonicalize(fixture.repo_root.join("README.md"))
+                .expect("fixture readme should canonicalize")
+        )
     );
     assert!(response.content.contains("fixture repository"));
     assert_eq!(response.bytes_read, response.content.len());
@@ -175,7 +189,9 @@ fn tree_builder_lists_files_inside_fixture_repo() {
         })
         .expect("tree builder should list files inside the root");
 
-    let root = fs::canonicalize(fixture.repo_root.join("src")).expect("src should canonicalize");
+    let root = strip_unc_prefix(
+        fs::canonicalize(fixture.repo_root.join("src")).expect("src should canonicalize"),
+    );
     let listed: BTreeSet<PathBuf> = response
         .entries
         .iter()
@@ -307,7 +323,9 @@ fn tree_builder_rejects_responses_that_exceed_the_byte_budget() {
 fn path_jail_accepts_windows_absolute_paths_with_different_letter_case() {
     let fixture = FixtureRepo::new("windows-case");
     let jail = PathJail::from_config(&fixture.config()).expect("fixture config should be valid");
-    let canonical = fs::canonicalize(fixture.readme_path()).expect("fixture readme should exist");
+    let canonical = strip_unc_prefix(
+        fs::canonicalize(fixture.readme_path()).expect("fixture readme should exist"),
+    );
     let requested = PathBuf::from(invert_ascii_case(&canonical.display().to_string()));
 
     let resolved = jail
