@@ -112,6 +112,16 @@ impl ResolvedPath {
     pub fn open_file(&self) -> Result<File, PathJailError> {
         self.revalidate_current_path()?;
 
+        if self.canonical_path.is_dir() {
+            return Err(PathJailError {
+                kind: PathJailErrorKind::Io,
+                message: format!(
+                    "'{}' is a directory, not a file; use `ctx-lite tree` to list its contents",
+                    self.canonical_path.display()
+                ),
+            });
+        }
+
         let file = open_file_for_read(&self.canonical_path).map_err(|error| {
             map_open_error(&self.canonical_path, error, "failed to open validated file")
         })?;
