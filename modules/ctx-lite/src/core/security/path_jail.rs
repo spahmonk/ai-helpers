@@ -301,14 +301,15 @@ fn windows_path_component_eq(
 }
 
 fn canonicalize_root(path: &Path) -> Result<PathBuf, PathJailError> {
-    fs::canonicalize(path).map_err(|error| PathJailError {
+    let canonical = fs::canonicalize(path).map_err(|error| PathJailError {
         kind: PathJailErrorKind::InvalidRoot,
         message: format!("failed to canonicalize root {}: {}", path.display(), error),
-    })
+    })?;
+    Ok(strip_extended_path_prefix(canonical))
 }
 
 fn canonicalize_existing_path(path: &Path) -> Result<PathBuf, PathJailError> {
-    fs::canonicalize(path).map_err(|error| match error.kind() {
+    let canonical = fs::canonicalize(path).map_err(|error| match error.kind() {
         std::io::ErrorKind::NotFound => PathJailError {
             kind: PathJailErrorKind::NotFound,
             message: format!("path {} does not exist", path.display()),
@@ -317,7 +318,28 @@ fn canonicalize_existing_path(path: &Path) -> Result<PathBuf, PathJailError> {
             kind: PathJailErrorKind::Io,
             message: format!("failed to canonicalize {}: {}", path.display(), error),
         },
-    })
+    })?;
+    Ok(strip_extended_path_prefix(canonical))
+}
+
+/// On Windows, `fs::canonicalize` returns paths with the `\\?\` extended-length prefix.
+/// Strip it so that canonical paths compare correctly against lexically-normalised paths
+/// (which never have this prefix). Paths longer than MAX_PATH are not a practical concern
+/// for a developer tool.
+#[cfg(windows)]
+fn strip_extended_path_prefix(path: PathBuf) -> PathBuf {
+    let s = path.to_string_lossy();
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+        PathBuf::from(rest)
+    } else {
+        path
+    }
+}
+
+#[cfg(not(windows))]
+#[inline]
+fn strip_extended_path_prefix(path: PathBuf) -> PathBuf {
+    path
 }
 
 fn enforce_file_link_policy(path: &Path) -> Result<(), PathJailError> {
@@ -423,4 +445,48 @@ fn lexically_normalize(path: &Path) -> PathBuf {
     }
 
     normalized
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    /// Regression test: canonicalize_root must NOT return a path with the \\?\ extended-length
+    /// prefix on Windows. If it does, comparisons against lexically-normalised paths (which
+    /// never carry this prefix) would always fail and every absolute-path request would be
+    /// rejected, even when the path is legitimately inside the allowed root.
+    #[test]
+    fn canonicalize_root_does_not_return_extended_path_prefix() {
+        let cwd = env::current_dir().expect("must have a current directory");
+        let canonical = canonicalize_root(&cwd)
+            .expect("current directory should canonicalize without error");
+        let s = canonical.to_string_lossy();
+        assert!(
+            !s.starts_with(r"\\?\"),
+            "canonicalized root must not contain the Windows \\?\\  extended-length prefix; got: {s}"
+        );
+    }
+
+    /// Regression test: a PathJail built from the default AppConfig must accept an absolute
+    /// path that is inside the current working directory.
+    #[test]
+    fn absolute_path_within_cwd_is_accepted() {
+        use crate::core::config::AppConfig;
+
+        let config = AppConfig::default();
+        let jail = PathJail::from_config(&config)
+            .expect("default AppConfig should produce a valid PathJail");
+
+        // Build an absolute path that is definitely inside the allowed root
+        // (the project root itself is always within allowed_roots).
+        let inner = config.project_root.join("Cargo.toml");
+        if !inner.exists() {
+            // Skip in environments without Cargo.toml (e.g. installed binary tests)
+            return;
+        }
+
+        jail.resolve(&inner)
+            .expect("absolute path inside allowed root should be accepted");
+    }
 }

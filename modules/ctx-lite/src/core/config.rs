@@ -36,7 +36,7 @@ impl AppConfig {
 
 impl Default for AppConfig {
     fn default() -> Self {
-        let project_root = PathBuf::from(".");
+        let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let shell_policy = ShellPolicyInputs::default();
         let shell_whitelist = default_shell_allowlist();
 
@@ -67,8 +67,12 @@ mod tests {
     fn defaults_are_safe() {
         let config = AppConfig::default();
 
-        assert_eq!(config.project_root, PathBuf::from("."));
-        assert_eq!(config.allowed_roots, vec![PathBuf::from(".")]);
+        // project_root resolves to the actual working directory (always absolute)
+        assert!(
+            config.project_root.is_absolute(),
+            "project_root should be absolute so absolute-path requests can be validated lexically"
+        );
+        assert_eq!(config.allowed_roots, vec![config.project_root.clone()]);
         assert!(!config.shell_enabled);
         assert_eq!(config.shell_whitelist, default_shell_allowlist());
         assert_eq!(config.max_read_bytes, 1_048_576);
