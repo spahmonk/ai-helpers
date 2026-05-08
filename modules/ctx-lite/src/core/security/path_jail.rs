@@ -179,7 +179,10 @@ impl ResolvedPath {
         if !metadata.is_dir() {
             return Err(PathJailError {
                 kind: PathJailErrorKind::Io,
-                message: format!("path {} is not a directory", current.display()),
+                message: format!(
+                    "'{}' is a file, not a directory; use `ctx-lite read` to view its contents",
+                    current.display()
+                ),
             });
         }
 
@@ -313,7 +316,11 @@ fn windows_path_component_eq(
 fn canonicalize_root(path: &Path) -> Result<PathBuf, PathJailError> {
     let canonical = fs::canonicalize(path).map_err(|error| PathJailError {
         kind: PathJailErrorKind::InvalidRoot,
-        message: format!("failed to canonicalize root {}: {}", path.display(), error),
+        message: format!(
+            "configured root '{}' is not accessible: {}",
+            path.display(),
+            error
+        ),
     })?;
     Ok(strip_extended_path_prefix(canonical))
 }
@@ -322,11 +329,11 @@ fn canonicalize_existing_path(path: &Path) -> Result<PathBuf, PathJailError> {
     let canonical = fs::canonicalize(path).map_err(|error| match error.kind() {
         std::io::ErrorKind::NotFound => PathJailError {
             kind: PathJailErrorKind::NotFound,
-            message: format!("path {} does not exist", path.display()),
+            message: format!("path '{}' does not exist", path.display()),
         },
         _ => PathJailError {
             kind: PathJailErrorKind::Io,
-            message: format!("failed to canonicalize {}: {}", path.display(), error),
+            message: format!("could not access path '{}': {}", path.display(), error),
         },
     })?;
     Ok(strip_extended_path_prefix(canonical))

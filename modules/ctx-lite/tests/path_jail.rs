@@ -288,7 +288,7 @@ fn tree_builder_rejects_responses_with_too_many_entries() {
 
     assert_eq!(error.kind, ServiceErrorKind::Unsupported);
     assert!(
-        error.message.contains("tree response"),
+        error.message.contains("narrow the scope"),
         "unexpected tree limit error: {}",
         error.message
     );
@@ -312,7 +312,7 @@ fn tree_builder_rejects_responses_that_exceed_the_byte_budget() {
 
     assert_eq!(error.kind, ServiceErrorKind::Unsupported);
     assert!(
-        error.message.contains("byte budget"),
+        error.message.contains("size limit"),
         "unexpected tree byte-limit error: {}",
         error.message
     );

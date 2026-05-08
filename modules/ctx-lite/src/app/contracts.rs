@@ -133,7 +133,7 @@ impl ShellRequest {
     pub fn normalize(self, config: &AppConfig) -> Result<ShellRequestNormalized, ContractError> {
         if !config.shell_enabled {
             return Err(ContractError {
-                reason: "shell execution is disabled by default".to_string(),
+                reason: "shell execution is disabled; enable it with --shell-profile safe|balanced|dangerous".to_string(),
             });
         }
 
@@ -422,7 +422,10 @@ fn normalize_base(base: &Path) -> Result<(PathBuf, usize, bool), ContractError> 
                     continue;
                 }
                 return Err(ContractError {
-                    reason: format!("configured root is not lexically safe: {}", base.display()),
+                    reason: format!(
+                        "configured project root '{}' contains '..' components that cannot be resolved; use an absolute or normalized path",
+                        base.display()
+                    ),
                 });
             }
             Component::RootDir => {

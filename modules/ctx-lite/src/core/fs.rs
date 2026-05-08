@@ -102,13 +102,13 @@ fn collect_tree(
         let is_directory = metadata.is_dir();
         if entries.len() >= MAX_TREE_ENTRIES {
             return Err(ServiceError::unsupported(format!(
-                "tree response exceeds the configured entry budget of {MAX_TREE_ENTRIES} entries"
+                "directory contains more than {MAX_TREE_ENTRIES} entries; use a more specific path or subdirectory to narrow the scope"
             )));
         }
         let next_entry_bytes = estimate_tree_path_bytes(path.path());
         if response_bytes.saturating_add(next_entry_bytes) > MAX_TREE_RESPONSE_BYTES {
             return Err(ServiceError::unsupported(format!(
-                "tree response exceeds the configured byte budget of {MAX_TREE_RESPONSE_BYTES} bytes"
+                "directory tree exceeds the size limit; use a more specific path or subdirectory to narrow the scope"
             )));
         }
         *response_bytes = response_bytes.saturating_add(next_entry_bytes);
@@ -164,7 +164,7 @@ fn read_utf8_prefix(
         }
         Err(error) => {
             return Err(ServiceError::internal(format!(
-                "failed to decode {} as UTF-8: {error}",
+                "'{}' appears to contain binary data and cannot be read as text",
                 path.display()
             )));
         }
