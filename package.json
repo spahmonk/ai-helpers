@@ -1,6 +1,6 @@
 {
   "name": "@spahmonk/ctx-lite",
-  "version": "1.0.4",
+  "version": "1.0.8",
   "description": "Fast context extractor for AI coding. No install needed: npx @spahmonk/ctx-lite",
   "main": "bin/index.js",
   "bin": {
