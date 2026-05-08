@@ -288,19 +288,49 @@ fn normalize_path_candidate(path: &Path, config: &AppConfig) -> Result<PathBuf, 
         lexical_join_with_base(&project_root, path)?
     };
 
-    if configured_allowed_roots(config, &project_root)?
+    let allowed_roots = configured_allowed_roots(config, &project_root)?;
+    if allowed_roots
         .iter()
         .any(|root| path_is_within_root(&candidate, root))
     {
         Ok(candidate)
     } else {
+        let roots_display = allowed_roots
+            .iter()
+            .map(|r| format!("'{}'", r.display()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let hint = build_path_hint(path, &candidate);
         Err(ContractError {
             reason: format!(
-                "path must stay within configured allowed roots after lexical normalization: {}",
-                path.display()
+                "path '{}' resolves to '{}' which is outside the configured allowed root(s): {}{}",
+                path.display(),
+                candidate.display(),
+                roots_display,
+                hint,
             ),
         })
     }
+}
+
+/// Returns an optional hint string when the resolved path differs meaningfully from the input,
+/// e.g. a Windows drive-relative path (\.aws → C:\.aws) that is likely a typo.
+fn build_path_hint(requested: &Path, resolved: &Path) -> String {
+    // On Windows, a path starting with \ but no drive letter is drive-relative.
+    // The user probably wanted a relative path (drop the leading \).
+    let req_str = requested.to_string_lossy();
+    let res_str = resolved.to_string_lossy();
+    if req_str.starts_with('\\') && !req_str.starts_with("\\\\") && res_str.contains(":\\") {
+        if let Some(name) = requested.file_name() {
+            return format!(
+                ". Tip: '{}' is a drive-relative path; use '.{}{}' for a path relative to your current directory",
+                requested.display(),
+                std::path::MAIN_SEPARATOR,
+                name.to_string_lossy()
+            );
+        }
+    }
+    String::new()
 }
 
 fn normalize_config_root(root: &Path) -> Result<PathBuf, ContractError> {
