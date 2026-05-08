@@ -1,0 +1,17 @@
+{
+  "packages": {
+    "modules/ctx-lite": {
+      "release-type": "rust",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": false,
+      "bump-patch-for-minor-pre-major": false,
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "package.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}
