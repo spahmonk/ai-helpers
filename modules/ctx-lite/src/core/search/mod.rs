@@ -396,11 +396,21 @@ mod tests {
     #[test]
     fn search_respects_path_jail_containment() {
         let temp = TempDir::new().expect("failed to create temp dir");
-        // Canonicalize to handle symlinks on macOS (e.g., /tmp -> /private/tmp)
-        let root = temp
-            .path()
-            .canonicalize()
-            .expect("failed to canonicalize root");
+        // Canonicalize to handle symlinks on macOS (e.g., /tmp -> /private/tmp).
+        // On Windows, fs::canonicalize returns a \\?\ UNC prefix; strip it so the
+        // path matches what PathJail returns from its own canonicalization.
+        let root = {
+            let p = temp
+                .path()
+                .canonicalize()
+                .expect("failed to canonicalize root");
+            let s = p.to_string_lossy();
+            if let Some(rest) = s.strip_prefix(r"\\?\") {
+                std::path::PathBuf::from(rest)
+            } else {
+                p
+            }
+        };
 
         // Create a file in the allowed root
         let allowed_file = root.join("allowed.txt");
