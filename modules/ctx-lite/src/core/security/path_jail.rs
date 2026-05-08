@@ -79,7 +79,7 @@ impl PathJail {
 
     pub fn resolve(&self, requested: &Path) -> Result<ResolvedPath, PathJailError> {
         let candidate = if requested.is_absolute() {
-            requested.to_path_buf()
+            strip_extended_path_prefix(requested.to_path_buf())
         } else {
             self.project_root.join(requested)
         };
@@ -459,8 +459,8 @@ mod tests {
     #[test]
     fn canonicalize_root_does_not_return_extended_path_prefix() {
         let cwd = env::current_dir().expect("must have a current directory");
-        let canonical = canonicalize_root(&cwd)
-            .expect("current directory should canonicalize without error");
+        let canonical =
+            canonicalize_root(&cwd).expect("current directory should canonicalize without error");
         let s = canonical.to_string_lossy();
         assert!(
             !s.starts_with(r"\\?\"),
