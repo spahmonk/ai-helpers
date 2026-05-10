@@ -1,0 +1,162 @@
+name: mem-lite Release
+
+on:
+  push:
+    tags:
+      - 'mem-lite-v*.*.*'
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }} ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: Linux
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: mem-lite
+            artifact_ext: tar.gz
+
+          - os: Linux ARM64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            artifact_name: mem-lite
+            artifact_ext: tar.gz
+
+          - os: macOS
+            runner: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: mem-lite
+            artifact_ext: tar.gz
+
+          - os: macOS ARM64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: mem-lite
+            artifact_ext: tar.gz
+
+          - os: Windows
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: mem-lite.exe
+            artifact_ext: zip
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          path: repo
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: repo
+
+      - name: Add cross-compile target (macOS ARM64)
+        if: matrix.target == 'aarch64-apple-darwin'
+        run: rustup target add aarch64-apple-darwin
+
+      - name: Build release binary
+        working-directory: repo
+        run: cargo build -p mem-lite --release --bin mem-lite ${{ matrix.target == 'aarch64-apple-darwin' && '--target aarch64-apple-darwin' || '' }}
+
+      - name: Strip binary (Unix)
+        if: runner.os != 'Windows'
+        working-directory: repo
+        run: strip target/release/mem-lite || true
+
+      - name: Create archive (Unix)
+        if: runner.os != 'Windows'
+        working-directory: repo
+        run: |
+          tag="${{ github.ref_name }}"
+          version="${tag#mem-lite-v}"
+          tar czf mem-lite-${version}-${{ matrix.target }}.tar.gz -C target/release mem-lite
+          cp mem-lite-${version}-${{ matrix.target }}.tar.gz $GITHUB_WORKSPACE/
+
+      - name: Create archive (Windows)
+        if: runner.os == 'Windows'
+        working-directory: repo
+        shell: powershell
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.Substring("mem-lite-v".Length)
+          $archive = "mem-lite-${version}-${{ matrix.target }}.zip"
+          Compress-Archive -Path "target\release\mem-lite.exe" -DestinationPath $archive -Force
+          Copy-Item $archive -Destination $env:GITHUB_WORKSPACE/
+
+      - name: Test binary
+        working-directory: repo
+        run: ./target/release/${{ matrix.artifact_name }} --version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.target }}
+          path: mem-lite-*
+          if-no-files-found: error
+
+  create-release:
+    name: Create GitHub Release and Publish to npm
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-*
+          merge-multiple: true
+          path: artifacts
+
+      - name: Create or update GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="${{ github.ref_name }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" artifacts/* --clobber
+          else
+            gh release create "$tag" artifacts/* --title "$tag" --generate-notes
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update package.json version
+        working-directory: packages/mem-lite
+        run: |
+          tag="${{ github.ref_name }}"
+          VERSION="${tag#mem-lite-v}"
+          npm version "${VERSION}" --no-git-tag-version --allow-same-version
+          cat package.json | grep -A 1 '"version"'
+
+      - name: Publish to npm
+        working-directory: packages/mem-lite
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "### mem-lite release pipeline summary"
+            echo
+            echo "- Tag: \`${{ github.ref_name }}\`"
+            echo "- Release assets: uploaded from matrix artifacts"
+            echo "- npm package: \`@spahmonk/mem-lite\`"
+          } >> "$GITHUB_STEP_SUMMARY"

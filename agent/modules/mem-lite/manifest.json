@@ -5,9 +5,9 @@
   "homepage": "https://github.com/spahmonk/ai-helpers",
 
   "install": {
-    "linux":   "curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.sh | bash",
-    "macos":   "curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.sh | bash",
-    "windows": "powershell -Command \"iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.ps1'))\"",
+    "linux":   "curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install-mem-lite.sh | bash",
+    "macos":   "curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install-mem-lite.sh | bash",
+    "windows": "powershell -Command \"iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install-mem-lite.ps1'))\"",
     "npm":     "npm install -g @spahmonk/mem-lite"
   },
 

@@ -1,0 +1,37 @@
+{
+  "name": "@spahmonk/mem-lite",
+  "version": "0.1.0",
+  "description": "Project-scoped AI memory — semantic/episodic/procedural, hybrid search, local SQLite, MCP server, cross-platform. No install needed: npx @spahmonk/mem-lite",
+  "main": "bin/index.js",
+  "bin": {
+    "mem-lite": "bin/index.js"
+  },
+  "scripts": {
+    "postinstall": "node bin/download-binary.js || true"
+  },
+  "keywords": [
+    "memory",
+    "ai",
+    "mcp",
+    "model-context-protocol",
+    "cli",
+    "semantic-search",
+    "sqlite"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/spahmonk/ai-helpers.git",
+    "directory": "packages/mem-lite"
+  },
+  "homepage": "https://github.com/spahmonk/ai-helpers#readme",
+  "bugs": {
+    "url": "https://github.com/spahmonk/ai-helpers/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "Copilot",
+  "preferGlobal": true,
+  "type": "module"
+}
