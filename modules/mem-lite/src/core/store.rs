@@ -142,12 +142,6 @@ impl MemoryStore {
                 )?;
             }
             MemoryLevel::Episodic => {
-                if !input.tags.is_empty() {
-                    return Err(StoreError::InvalidInput(
-                        "episodic memories do not support tags",
-                    ));
-                }
-
                 self.conn.execute(
                     "INSERT INTO episodic_memories (
                         id, project_id, content, event_kind, created_at

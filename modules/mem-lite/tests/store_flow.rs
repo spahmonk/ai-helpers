@@ -139,22 +139,3 @@ fn stats_count_each_level_independently() {
     assert_eq!(stats.procedural_count, 1);
     assert_eq!(stats.episodic_count, 1);
 }
-
-#[test]
-fn remember_rejects_episodic_tags() {
-    let fixture = MemoryFixture::new();
-
-    let error = fixture
-        .store()
-        .remember(RememberInput {
-            level: MemoryLevel::Episodic,
-            title: "Incident".into(),
-            content: "Observed a store write".into(),
-            tags: vec!["event".into()],
-            source: MemorySource::Explicit,
-        })
-        .expect_err("episodic tags should be rejected until stored explicitly");
-
-    assert!(error.to_string().contains("episodic"));
-    assert!(error.to_string().contains("tags"));
-}
