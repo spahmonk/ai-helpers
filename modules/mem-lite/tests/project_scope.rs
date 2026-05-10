@@ -13,6 +13,26 @@ fn different_workspace_roots_get_different_project_fingerprints() {
     assert_ne!(left_scope.database_path, right_scope.database_path);
 }
 
+#[cfg(unix)]
+#[test]
+fn invalid_utf8_workspace_roots_get_distinct_project_ids() {
+    use std::ffi::OsString;
+    use std::fs;
+    use std::os::unix::ffi::OsStringExt;
+
+    let temp = tempdir().unwrap();
+    let left = temp.path().join(OsString::from_vec(vec![0x80]));
+    let right = temp.path().join(OsString::from_vec(vec![0x81]));
+
+    fs::create_dir(&left).unwrap();
+    fs::create_dir(&right).unwrap();
+
+    let left_scope = ProjectScope::from_workspace_root(&left).unwrap();
+    let right_scope = ProjectScope::from_workspace_root(&right).unwrap();
+
+    assert_ne!(left_scope.project_id, right_scope.project_id);
+}
+
 #[test]
 fn same_workspace_root_produces_stable_project_identity() {
     let temp = tempdir().unwrap();

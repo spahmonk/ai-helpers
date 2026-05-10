@@ -45,9 +45,7 @@ impl ProjectScope {
         }
 
         let canonical = root.canonicalize().map_err(ProjectError::io)?;
-        let mut hasher = Sha256::new();
-        hasher.update(canonical.to_string_lossy().as_bytes());
-        let digest = hex::encode(hasher.finalize());
+        let digest = hash_path_identity(&canonical);
         let project_id = digest[..16].to_string();
         let database_path = default_mem_lite_home()
             .join("projects")
@@ -60,4 +58,26 @@ impl ProjectScope {
             database_path,
         })
     }
+}
+
+fn hash_path_identity(path: &Path) -> String {
+    let mut hasher = Sha256::new();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+
+        hasher.update(path.as_os_str().as_bytes());
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+
+        for unit in path.as_os_str().encode_wide() {
+            hasher.update(unit.to_le_bytes());
+        }
+    }
+
+    hex::encode(hasher.finalize())
 }
