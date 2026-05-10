@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 use rusqlite::{params, Connection};
 
-use crate::core::embed::{cosine_similarity, validate_embedding, EmbedError, Embedder};
+use crate::core::embed::{cosine_similarity, validate_embedding};
 use crate::core::store::{MemoryLevel, StoreError};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -39,7 +39,7 @@ pub fn search_semantic(
     conn: &Connection,
     project_id: &str,
     input: SearchInput,
-    embedder: Option<&dyn Embedder>,
+    query_embedding: Option<&[f32]>,
 ) -> Result<Vec<SearchHit>, StoreError> {
     let query_terms = tokenize_list(&input.query);
 
@@ -48,28 +48,13 @@ pub fn search_semantic(
     }
 
     let fts_query = build_fts_query(&query_terms);
-    let query_embedding = match embedder {
-        Some(provider) => match provider.embed(&input.query) {
-            Ok(embedding) => {
-                validate_embedding(&embedding)?;
-                Some(embedding)
-            }
-            Err(crate::core::embed::EmbedError::Unavailable(_)) => None,
-            Err(error) => return Err(error.into()),
-        },
-        None => None,
-    };
-
-    if let (Some(provider), Some(_)) = (embedder, query_embedding.as_ref()) {
-        backfill_missing_embeddings(conn, project_id, provider)?;
-    }
 
     let required_tags = normalized_tag_set(&input.tags);
     let vector_scores = vector_candidate_scores(
         conn,
         project_id,
         &required_tags,
-        query_embedding.as_deref(),
+        query_embedding,
         candidate_limit(input.limit),
     )?;
 
@@ -170,61 +155,6 @@ pub fn search_semantic(
         })
         .collect())
 }
-
-fn backfill_missing_embeddings(
-    conn: &Connection,
-    project_id: &str,
-    embedder: &dyn Embedder,
-) -> Result<(), StoreError> {
-    let mut statement = conn.prepare(
-        "
-        SELECT sm.id, sm.title, sm.content, sm.tags_json, sm.created_at
-        FROM semantic_memories sm
-        LEFT JOIN semantic_embeddings se ON se.memory_id = sm.id
-        WHERE sm.project_id = ?1
-          AND se.memory_id IS NULL
-        ",
-    )?;
-
-    let rows = statement.query_map(params![project_id], |row| {
-        let memory_id: String = row.get(0)?;
-        let title: String = row.get(1)?;
-        let content: String = row.get(2)?;
-        let tags_json: String = row.get(3)?;
-        let created_at: String = row.get(4)?;
-
-        Ok((memory_id, title, content, tags_json, created_at))
-    })?;
-
-    let pending_rows = rows.collect::<Result<Vec<_>, _>>()?;
-
-    for (memory_id, title, content, tags_json, created_at) in pending_rows {
-        let tags: Vec<String> = match serde_json::from_str(&tags_json) {
-            Ok(tags) => tags,
-            Err(_) => continue,
-        };
-        let searchable_text = format!("{title}\n{content}\n{}", tags.join(" "));
-        let embedding = match embedder.embed(&searchable_text) {
-            Ok(embedding) => embedding,
-            Err(EmbedError::Unavailable(_)) => return Ok(()),
-            Err(EmbedError::InvalidVector(_)) => continue,
-        };
-
-        if validate_embedding(&embedding).is_err() {
-            continue;
-        }
-
-        conn.execute(
-            "INSERT OR IGNORE INTO semantic_embeddings (
-                memory_id, embedding_json, created_at
-            ) VALUES (?1, ?2, ?3)",
-            params![memory_id, serde_json::to_string(&embedding)?, created_at],
-        )?;
-    }
-
-    Ok(())
-}
-
 fn vector_candidate_scores(
     conn: &Connection,
     project_id: &str,

@@ -2,6 +2,10 @@ use std::error::Error;
 use std::fmt;
 
 pub trait Embedder: Send + Sync {
+    fn identity(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
+
     fn embed(&self, input: &str) -> Result<Vec<f32>, EmbedError>;
 }
 
@@ -40,7 +44,9 @@ impl Error for EmbedError {
 
 pub fn validate_embedding(vector: &[f32]) -> Result<(), EmbedError> {
     if vector.is_empty() {
-        return Err(EmbedError::InvalidVector("embedding vectors must not be empty"));
+        return Err(EmbedError::InvalidVector(
+            "embedding vectors must not be empty",
+        ));
     }
 
     let mut norm = 0.0f32;

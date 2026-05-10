@@ -47,6 +47,10 @@ pub fn bootstrap(conn: &Connection) -> rusqlite::Result<()> {
             embedding_json TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS store_metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
         INSERT INTO semantic_fts (memory_id, title, content, tags)
         SELECT
             id,

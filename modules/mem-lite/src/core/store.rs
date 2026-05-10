@@ -13,6 +13,7 @@ use crate::core::retrieval::{search_semantic, SearchHit, SearchInput};
 use crate::core::schema;
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+const SEMANTIC_EMBEDDER_IDENTITY_KEY: &str = "semantic_embedder_identity";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MemoryLevel {
@@ -66,6 +67,8 @@ pub enum StoreError {
     Embed(EmbedError),
     Time(std::time::SystemTimeError),
     InvalidInput(&'static str),
+    EmbedderIdentityMismatch { expected: String, actual: String },
+    MissingEmbedderIdentity,
 }
 
 impl fmt::Display for StoreError {
@@ -77,6 +80,15 @@ impl fmt::Display for StoreError {
             StoreError::Embed(error) => error.fmt(f),
             StoreError::Time(error) => error.fmt(f),
             StoreError::InvalidInput(message) => f.write_str(message),
+            StoreError::EmbedderIdentityMismatch { expected, actual } => {
+                write!(
+                    f,
+                    "embedder identity mismatch: store vectors use '{expected}', but '{actual}' was requested"
+                )
+            }
+            StoreError::MissingEmbedderIdentity => f.write_str(
+                "stored embeddings exist but embedder identity metadata is missing; clear and rebuild embeddings before vector search or vector persistence",
+            ),
         }
     }
 }
@@ -168,6 +180,7 @@ impl MemoryStore {
                     Some(embedder) => match embedder.embed(&searchable_text) {
                         Ok(embedding) => {
                             validate_embedding(&embedding)?;
+                            self.ensure_embedder_identity_for_write(embedder.identity())?;
                             Some(embedding)
                         }
                         Err(EmbedError::Unavailable(_)) => None,
@@ -213,13 +226,7 @@ impl MemoryStore {
                     "INSERT INTO episodic_memories (
                         id, project_id, content, event_kind, created_at
                     ) VALUES (?1, ?2, ?3, ?4, ?5)",
-                    params![
-                        id,
-                        self.scope.project_id,
-                        content,
-                        title,
-                        timestamp,
-                    ],
+                    params![id, self.scope.project_id, content, title, timestamp,],
                 )?;
             }
             MemoryLevel::Procedural => {
@@ -245,20 +252,67 @@ impl MemoryStore {
 
     pub fn search(&self, input: SearchInput) -> Result<Vec<SearchHit>, StoreError> {
         match input.level {
-            Some(MemoryLevel::Episodic) | Some(MemoryLevel::Procedural) => {
-                Err(StoreError::InvalidInput(
-                    "search currently supports semantic memories only",
-                ))
-            }
+            Some(MemoryLevel::Episodic) | Some(MemoryLevel::Procedural) => Err(
+                StoreError::InvalidInput("search currently supports semantic memories only"),
+            ),
             Some(MemoryLevel::Semantic) | None => {
+                let query_embedding = match self.embedder.as_deref() {
+                    Some(embedder) => match embedder.embed(&input.query) {
+                        Ok(embedding) => {
+                            validate_embedding(&embedding)?;
+
+                            if self.any_semantic_embeddings_exist()? {
+                                self.ensure_embedder_identity_for_search(embedder.identity())?;
+                            }
+
+                            Some(embedding)
+                        }
+                        Err(EmbedError::Unavailable(_)) => None,
+                        Err(error) => return Err(error.into()),
+                    },
+                    None => None,
+                };
+
                 search_semantic(
                     &self.conn,
                     &self.scope.project_id,
                     input,
-                    self.embedder.as_deref(),
+                    query_embedding.as_deref(),
                 )
             }
         }
+    }
+
+    pub fn backfill_embeddings(&self) -> Result<usize, StoreError> {
+        let embedder = self.embedder.as_deref().ok_or(StoreError::InvalidInput(
+            "backfill_embeddings requires an embedder",
+        ))?;
+        self.ensure_embedder_identity_for_write(embedder.identity())?;
+
+        let pending_rows = self.pending_semantic_backfill_rows()?;
+        let mut pending_embeddings = Vec::with_capacity(pending_rows.len());
+
+        for (memory_id, title, content, tags_json, created_at) in pending_rows {
+            let tags: Vec<String> = serde_json::from_str(&tags_json)?;
+            let searchable_text = format!("{title}\n{content}\n{}", tags.join(" "));
+            let embedding = embedder.embed(&searchable_text)?;
+            validate_embedding(&embedding)?;
+            pending_embeddings.push((memory_id, serde_json::to_string(&embedding)?, created_at));
+        }
+
+        let tx = self.conn.unchecked_transaction()?;
+
+        for (memory_id, embedding_json, created_at) in &pending_embeddings {
+            tx.execute(
+                "INSERT OR IGNORE INTO semantic_embeddings (
+                    memory_id, embedding_json, created_at
+                ) VALUES (?1, ?2, ?3)",
+                params![memory_id, embedding_json, created_at],
+            )?;
+        }
+
+        tx.commit()?;
+        Ok(pending_embeddings.len())
     }
 
     pub fn recent(&self, limit: usize) -> Result<Vec<RecentMemory>, StoreError> {
@@ -300,6 +354,87 @@ impl MemoryStore {
                 "procedural_memories",
             )?,
         })
+    }
+
+    fn ensure_embedder_identity_for_write(&self, identity: &str) -> Result<(), StoreError> {
+        match self.recorded_embedder_identity()? {
+            Some(recorded_identity) if recorded_identity == identity => Ok(()),
+            Some(recorded_identity) => Err(StoreError::EmbedderIdentityMismatch {
+                expected: recorded_identity,
+                actual: identity.to_string(),
+            }),
+            None if self.any_semantic_embeddings_exist()? => {
+                Err(StoreError::MissingEmbedderIdentity)
+            }
+            None => self.set_recorded_embedder_identity(identity),
+        }
+    }
+
+    fn ensure_embedder_identity_for_search(&self, identity: &str) -> Result<(), StoreError> {
+        match self.recorded_embedder_identity()? {
+            Some(recorded_identity) if recorded_identity == identity => Ok(()),
+            Some(recorded_identity) => Err(StoreError::EmbedderIdentityMismatch {
+                expected: recorded_identity,
+                actual: identity.to_string(),
+            }),
+            None => Err(StoreError::MissingEmbedderIdentity),
+        }
+    }
+
+    fn recorded_embedder_identity(&self) -> Result<Option<String>, StoreError> {
+        let identity = self
+            .conn
+            .query_row(
+                "SELECT value FROM store_metadata WHERE key = ?1",
+                params![SEMANTIC_EMBEDDER_IDENTITY_KEY],
+                |row| row.get::<_, String>(0),
+            )
+            .ok();
+        Ok(identity)
+    }
+
+    fn set_recorded_embedder_identity(&self, identity: &str) -> Result<(), StoreError> {
+        self.conn.execute(
+            "INSERT INTO store_metadata (key, value)
+             VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![SEMANTIC_EMBEDDER_IDENTITY_KEY, identity],
+        )?;
+        Ok(())
+    }
+
+    fn any_semantic_embeddings_exist(&self) -> Result<bool, StoreError> {
+        let count = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM semantic_embeddings", [], |row| {
+                row.get::<_, i64>(0)
+            })?;
+        Ok(count > 0)
+    }
+    fn pending_semantic_backfill_rows(
+        &self,
+    ) -> Result<Vec<(String, String, String, String, String)>, StoreError> {
+        let mut statement = self.conn.prepare(
+            "
+            SELECT sm.id, sm.title, sm.content, sm.tags_json, sm.created_at
+            FROM semantic_memories sm
+            LEFT JOIN semantic_embeddings se ON se.memory_id = sm.id
+            WHERE sm.project_id = ?1
+              AND se.memory_id IS NULL
+            ",
+        )?;
+
+        let rows = statement.query_map(params![self.scope.project_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })?;
+
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 }
 

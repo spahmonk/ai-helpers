@@ -1,4 +1,7 @@
-use std::{error::Error, sync::Arc};
+use std::{
+    error::Error,
+    sync::{Arc, Mutex},
+};
 
 use mem_lite::{
     EmbedError, Embedder, MemoryLevel, MemorySource, MemoryStore, ProjectScope, RememberInput,
@@ -39,6 +42,10 @@ impl MemoryFixture {
 struct TestEmbedder;
 
 impl Embedder for TestEmbedder {
+    fn identity(&self) -> &'static str {
+        "test-embedder"
+    }
+
     fn embed(&self, input: &str) -> Result<Vec<f32>, EmbedError> {
         let lowered = input.to_ascii_lowercase();
 
@@ -64,6 +71,10 @@ impl std::fmt::Display for UnavailableEmbedder {
 impl Error for UnavailableEmbedder {}
 
 impl Embedder for UnavailableEmbedder {
+    fn identity(&self) -> &'static str {
+        "unavailable-embedder"
+    }
+
     fn embed(&self, _input: &str) -> Result<Vec<f32>, EmbedError> {
         Err(EmbedError::unavailable(UnavailableEmbedder))
     }
@@ -72,6 +83,10 @@ impl Embedder for UnavailableEmbedder {
 struct InvalidEmbedder;
 
 impl Embedder for InvalidEmbedder {
+    fn identity(&self) -> &'static str {
+        "invalid-embedder"
+    }
+
     fn embed(&self, _input: &str) -> Result<Vec<f32>, EmbedError> {
         Err(EmbedError::InvalidVector("bad embedding"))
     }
@@ -80,8 +95,59 @@ impl Embedder for InvalidEmbedder {
 struct EmptyVectorEmbedder;
 
 impl Embedder for EmptyVectorEmbedder {
+    fn identity(&self) -> &'static str {
+        "empty-vector-embedder"
+    }
+
     fn embed(&self, _input: &str) -> Result<Vec<f32>, EmbedError> {
         Ok(vec![])
+    }
+}
+
+struct AlternateEmbedder;
+
+impl Embedder for AlternateEmbedder {
+    fn identity(&self) -> &'static str {
+        "alternate-embedder"
+    }
+
+    fn embed(&self, input: &str) -> Result<Vec<f32>, EmbedError> {
+        let lowered = input.to_ascii_lowercase();
+
+        if lowered.contains("platform note a") || lowered.contains("windows") {
+            Ok(vec![0.0, 1.0])
+        } else if lowered.contains("platform note b") || lowered.contains("linux") {
+            Ok(vec![1.0, 0.0])
+        } else {
+            Ok(vec![0.5, 0.5])
+        }
+    }
+}
+
+struct CountingEmbedder {
+    calls: Arc<Mutex<Vec<String>>>,
+}
+
+impl CountingEmbedder {
+    fn new() -> (Arc<Self>, Arc<Mutex<Vec<String>>>) {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        (
+            Arc::new(Self {
+                calls: calls.clone(),
+            }),
+            calls,
+        )
+    }
+}
+
+impl Embedder for CountingEmbedder {
+    fn identity(&self) -> &'static str {
+        "counting-embedder"
+    }
+
+    fn embed(&self, input: &str) -> Result<Vec<f32>, EmbedError> {
+        self.calls.lock().unwrap().push(input.to_string());
+        TestEmbedder.embed(input)
     }
 }
 
@@ -137,6 +203,16 @@ fn semantic_embedding_count(scope: &ProjectScope, title: &str) -> i64 {
         |row| row.get::<_, i64>(0),
     )
     .unwrap()
+}
+
+fn metadata_value(scope: &ProjectScope, key: &str) -> Option<String> {
+    let conn = Connection::open(&scope.database_path).unwrap();
+    conn.query_row(
+        "SELECT value FROM store_metadata WHERE key = ?1",
+        params![key],
+        |row| row.get::<_, String>(0),
+    )
+    .ok()
 }
 
 fn set_procedural_created_at(scope: &ProjectScope, name: &str, created_at: &str) {
@@ -611,7 +687,48 @@ fn search_falls_back_to_lexical_ranking_after_reopen_without_embedder() {
 }
 
 #[test]
-fn search_backfills_missing_embeddings_for_existing_semantic_rows() {
+fn search_remains_read_only_when_embeddings_are_missing() {
+    let fixture = MemoryFixture::new();
+    fixture
+        .store()
+        .remember(explicit_semantic(
+            "Drive-relative platform note",
+            "Drive-relative behavior should be explained clearly",
+        ))
+        .unwrap();
+
+    assert_eq!(
+        semantic_embedding_count(&fixture.scope, "Drive-relative platform note"),
+        0
+    );
+
+    let (embedder, calls) = CountingEmbedder::new();
+    let hits = fixture
+        .store_with_embedder(embedder)
+        .search(SearchInput {
+            query: "windows drive-relative path".into(),
+            limit: 5,
+            level: None,
+            tags: vec![],
+        })
+        .unwrap();
+
+    assert_eq!(
+        hits[0].title.as_deref(),
+        Some("Drive-relative platform note")
+    );
+    assert_eq!(
+        semantic_embedding_count(&fixture.scope, "Drive-relative platform note"),
+        0
+    );
+    assert_eq!(
+        calls.lock().unwrap().as_slice(),
+        ["windows drive-relative path"]
+    );
+}
+
+#[test]
+fn backfill_embeddings_populates_missing_embeddings_after_reopen() {
     let fixture = MemoryFixture::new();
     fixture
         .store()
@@ -621,13 +738,9 @@ fn search_backfills_missing_embeddings_for_existing_semantic_rows() {
         ))
         .unwrap();
 
-    assert_eq!(
-        semantic_embedding_count(&fixture.scope, "Platform note A"),
-        0
-    );
+    let store = fixture.store_with_embedder(Arc::new(TestEmbedder));
 
-    let hits = fixture
-        .store_with_embedder(Arc::new(TestEmbedder))
+    let before_hits = store
         .search(SearchInput {
             query: "windows drive-relative path".into(),
             limit: 5,
@@ -635,12 +748,99 @@ fn search_backfills_missing_embeddings_for_existing_semantic_rows() {
             tags: vec![],
         })
         .unwrap();
+    assert!(before_hits.is_empty());
+    assert_eq!(
+        semantic_embedding_count(&fixture.scope, "Platform note A"),
+        0
+    );
 
-    assert_eq!(hits[0].title.as_deref(), Some("Platform note A"));
+    let inserted = store.backfill_embeddings().unwrap();
+
+    assert_eq!(inserted, 1);
     assert_eq!(
         semantic_embedding_count(&fixture.scope, "Platform note A"),
         1
     );
+    assert_eq!(
+        metadata_value(&fixture.scope, "semantic_embedder_identity").as_deref(),
+        Some("test-embedder")
+    );
+
+    let after_hits = store
+        .search(SearchInput {
+            query: "windows drive-relative path".into(),
+            limit: 5,
+            level: None,
+            tags: vec![],
+        })
+        .unwrap();
+    assert_eq!(after_hits[0].title.as_deref(), Some("Platform note A"));
+}
+
+#[test]
+fn search_rejects_mismatched_embedder_identity() {
+    let fixture = MemoryFixture::new();
+    fixture
+        .store_with_embedder(Arc::new(TestEmbedder))
+        .remember(explicit_semantic(
+            "Platform note A",
+            "Rooted behavior should be explained clearly",
+        ))
+        .unwrap();
+
+    let error = fixture
+        .store_with_embedder(Arc::new(AlternateEmbedder))
+        .search(SearchInput {
+            query: "windows drive-relative path".into(),
+            limit: 5,
+            level: None,
+            tags: vec![],
+        })
+        .unwrap_err();
+
+    assert!(error.to_string().contains("embedder identity mismatch"));
+    assert!(error.to_string().contains("test-embedder"));
+    assert!(error.to_string().contains("alternate-embedder"));
+}
+
+#[test]
+fn search_rejects_mismatched_embedder_identity_across_projects() {
+    let fixture = MemoryFixture::new();
+    let shared_path = fixture.scope.database_path.clone();
+    let first_scope = ProjectScope {
+        workspace_root: fixture.scope.workspace_root.join("one"),
+        project_id: "project-one".into(),
+        database_path: shared_path.clone(),
+    };
+    let second_scope = ProjectScope {
+        workspace_root: fixture.scope.workspace_root.join("two"),
+        project_id: "project-two".into(),
+        database_path: shared_path,
+    };
+
+    MemoryStore::open_with_embedder(first_scope, Arc::new(TestEmbedder))
+        .unwrap()
+        .remember(explicit_semantic(
+            "Platform note A",
+            "Rooted behavior should be explained clearly",
+        ))
+        .unwrap();
+
+    let error = MemoryStore::open_with_embedder(second_scope, Arc::new(AlternateEmbedder))
+        .unwrap()
+        .search(SearchInput {
+            query: "windows drive-relative path".into(),
+            limit: 5,
+            level: None,
+            tags: vec![],
+        })
+        .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("embedder identity mismatch"));
+    assert!(error.to_string().contains("test-embedder"));
+    assert!(error.to_string().contains("alternate-embedder"));
 }
 
 #[test]
