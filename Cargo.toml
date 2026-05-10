@@ -1,4 +1,3 @@
 [workspace]
-members = ["modules/ctx-lite"]
+members = ["modules/ctx-lite", "modules/mem-lite"]
 resolver = "2"
-
