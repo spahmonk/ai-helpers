@@ -1,8 +1,10 @@
 pub mod app;
 pub mod core;
 
+pub use core::embed::{EmbedError, Embedder};
 pub use core::config::default_mem_lite_home;
 pub use core::project::{ProjectError, ProjectScope};
+pub use core::retrieval::{SearchHit, SearchInput};
 pub use core::store::{
     MemoryLevel, MemorySource, MemoryStats, MemoryStore, RecentMemory, RememberInput, StoreError,
 };

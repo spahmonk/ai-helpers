@@ -2,11 +2,14 @@ use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection};
 
+use crate::core::embed::{EmbedError, Embedder};
 use crate::core::project::ProjectScope;
+use crate::core::retrieval::{search_semantic, SearchHit, SearchInput};
 use crate::core::schema;
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -60,6 +63,7 @@ pub enum StoreError {
     Io(std::io::Error),
     Sql(rusqlite::Error),
     Json(serde_json::Error),
+    Embed(EmbedError),
     Time(std::time::SystemTimeError),
     InvalidInput(&'static str),
 }
@@ -70,6 +74,7 @@ impl fmt::Display for StoreError {
             StoreError::Io(error) => error.fmt(f),
             StoreError::Sql(error) => error.fmt(f),
             StoreError::Json(error) => error.fmt(f),
+            StoreError::Embed(error) => error.fmt(f),
             StoreError::Time(error) => error.fmt(f),
             StoreError::InvalidInput(message) => f.write_str(message),
         }
@@ -102,13 +107,34 @@ impl From<std::time::SystemTimeError> for StoreError {
     }
 }
 
+impl From<EmbedError> for StoreError {
+    fn from(value: EmbedError) -> Self {
+        Self::Embed(value)
+    }
+}
+
 pub struct MemoryStore {
     scope: ProjectScope,
     conn: Connection,
+    embedder: Option<Arc<dyn Embedder>>,
 }
 
 impl MemoryStore {
     pub fn open(scope: ProjectScope) -> Result<Self, StoreError> {
+        Self::open_with_optional_embedder(scope, None)
+    }
+
+    pub fn open_with_embedder(
+        scope: ProjectScope,
+        embedder: Arc<dyn Embedder>,
+    ) -> Result<Self, StoreError> {
+        Self::open_with_optional_embedder(scope, Some(embedder))
+    }
+
+    fn open_with_optional_embedder(
+        scope: ProjectScope,
+        embedder: Option<Arc<dyn Embedder>>,
+    ) -> Result<Self, StoreError> {
         if let Some(parent) = scope.database_path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -116,30 +142,68 @@ impl MemoryStore {
         let conn = Connection::open(&scope.database_path)?;
         schema::bootstrap(&conn)?;
 
-        Ok(Self { scope, conn })
+        Ok(Self {
+            scope,
+            conn,
+            embedder,
+        })
     }
 
     pub fn remember(&self, input: RememberInput) -> Result<(), StoreError> {
         let id = next_id()?;
         let timestamp = now_string()?;
+        let RememberInput {
+            level,
+            title,
+            content,
+            tags,
+            source,
+        } = input;
 
-        match input.level {
+        match level {
             MemoryLevel::Semantic => {
-                self.conn.execute(
+                let tags_json = serde_json::to_string(&tags)?;
+                let searchable_text = format!("{title}\n{content}\n{}", tags.join(" "));
+                let maybe_embedding = match self.embedder.as_deref() {
+                    Some(embedder) => match embedder.embed(&searchable_text) {
+                        Ok(embedding) => Some(embedding),
+                        Err(EmbedError::Unavailable(_)) => None,
+                        Err(error) => return Err(error.into()),
+                    },
+                    None => None,
+                };
+
+                let tx = self.conn.unchecked_transaction()?;
+                tx.execute(
                     "INSERT INTO semantic_memories (
                         id, project_id, title, content, tags_json, created_at, updated_at, source
                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                     params![
                         id,
                         self.scope.project_id,
-                        input.title,
-                        input.content,
-                        serde_json::to_string(&input.tags)?,
+                        title,
+                        content,
+                        tags_json,
                         timestamp,
                         timestamp,
-                        input.source.as_str(),
+                        source.as_str(),
                     ],
                 )?;
+                tx.execute(
+                    "INSERT INTO semantic_fts (memory_id, title, content, tags) VALUES (?1, ?2, ?3, ?4)",
+                    params![id, title, content, tags.join(" ")],
+                )?;
+
+                if let Some(embedding) = maybe_embedding {
+                    tx.execute(
+                        "INSERT OR REPLACE INTO semantic_embeddings (
+                            memory_id, embedding_json, created_at
+                        ) VALUES (?1, ?2, ?3)",
+                        params![id, serde_json::to_string(&embedding)?, timestamp],
+                    )?;
+                }
+
+                tx.commit()?;
             }
             MemoryLevel::Episodic => {
                 self.conn.execute(
@@ -149,8 +213,8 @@ impl MemoryStore {
                     params![
                         id,
                         self.scope.project_id,
-                        input.content,
-                        input.title,
+                        content,
+                        title,
                         timestamp,
                     ],
                 )?;
@@ -163,9 +227,9 @@ impl MemoryStore {
                     params![
                         id,
                         self.scope.project_id,
-                        input.title,
-                        input.content,
-                        serde_json::to_string(&input.tags)?,
+                        title,
+                        content,
+                        serde_json::to_string(&tags)?,
                         timestamp,
                         timestamp,
                     ],
@@ -174,6 +238,24 @@ impl MemoryStore {
         }
 
         Ok(())
+    }
+
+    pub fn search(&self, input: SearchInput) -> Result<Vec<SearchHit>, StoreError> {
+        match input.level {
+            Some(MemoryLevel::Episodic) | Some(MemoryLevel::Procedural) => {
+                Err(StoreError::InvalidInput(
+                    "search currently supports semantic memories only",
+                ))
+            }
+            Some(MemoryLevel::Semantic) | None => {
+                search_semantic(
+                    &self.conn,
+                    &self.scope.project_id,
+                    input,
+                    self.embedder.as_deref(),
+                )
+            }
+        }
     }
 
     pub fn recent(&self, limit: usize) -> Result<Vec<RecentMemory>, StoreError> {
