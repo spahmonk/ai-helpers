@@ -421,7 +421,16 @@ where
             .capture_batch(CaptureBatchRequest { entries, root })
             .map_err(|error| error.message)?;
 
-        Ok(format!("Captured {} memories", response.stored))
+        Ok(if response.errors.is_empty() {
+            format!("Captured {} memories", response.stored)
+        } else {
+            format!(
+                "Captured {} memories ({} failed: {})",
+                response.stored,
+                response.errors.len(),
+                response.errors.join("; ")
+            )
+        })
     }
 
     fn call_search(
@@ -554,6 +563,7 @@ fn argument_strings(
     key: &str,
 ) -> Result<Vec<String>, String> {
     match arguments.get(key) {
+        None | Some(Value::Null) => Ok(Vec::new()),
         Some(Value::Array(items)) => items
             .iter()
             .map(|value| {
@@ -564,7 +574,6 @@ fn argument_strings(
             })
             .collect(),
         Some(_) => Err(format!("invalid {key}")),
-        None => Ok(Vec::new()),
     }
 }
 

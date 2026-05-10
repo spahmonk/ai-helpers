@@ -25,12 +25,14 @@ pub enum MemoryLevel {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MemorySource {
     Explicit,
+    AutoCapture,
 }
 
 impl MemorySource {
     fn as_str(&self) -> &'static str {
         match self {
             Self::Explicit => "explicit",
+            Self::AutoCapture => "auto_capture",
         }
     }
 }

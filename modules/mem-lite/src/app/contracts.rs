@@ -112,6 +112,8 @@ pub struct CaptureBatchRequest {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CaptureBatchResponse {
     pub stored: usize,
+    /// Entry-level errors (if any). Non-empty only on partial failure.
+    pub errors: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

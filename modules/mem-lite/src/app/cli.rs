@@ -339,10 +339,19 @@ where
         };
 
         match self.services.capture_batch(CaptureBatchRequest { entries, root }) {
-            Ok(response) => CliResult {
-                output: format!("Captured {} memories\n", response.stored),
-                exit_code: 0,
-            },
+            Ok(response) => {
+                let mut out = format!("Captured {} memories\n", response.stored);
+                if !response.errors.is_empty() {
+                    out.push_str(&format!(
+                        "Warning: {} entries failed:\n",
+                        response.errors.len()
+                    ));
+                    for e in &response.errors {
+                        out.push_str(&format!("  - {e}\n"));
+                    }
+                }
+                CliResult { output: out, exit_code: 0 }
+            }
             Err(error) => error_result(error.message),
         }
     }

@@ -105,7 +105,9 @@ impl CaptureBatchService for MemoryServiceAdapter {
         request: CaptureBatchRequest,
     ) -> Result<CaptureBatchResponse, ServiceError> {
         let (_scope, store) = Self::open_store(request.root.as_deref())?;
+        let total = request.entries.len();
         let mut stored = 0usize;
+        let mut errors: Vec<String> = Vec::new();
 
         for entry in request.entries {
             let input = RememberInput {
@@ -117,16 +119,24 @@ impl CaptureBatchService for MemoryServiceAdapter {
                 title: Self::summarize_title(entry.title, &entry.content),
                 content: entry.content,
                 tags: entry.tags,
-                source: MemorySource::Explicit,
+                source: MemorySource::AutoCapture,
             };
 
-            store
-                .remember(input)
-                .map_err(|error| ServiceError::new(error.to_string()))?;
-            stored += 1;
+            match store.remember(input) {
+                Ok(()) => stored += 1,
+                Err(e) => errors.push(e.to_string()),
+            }
         }
 
-        Ok(CaptureBatchResponse { stored })
+        if stored == 0 && !errors.is_empty() {
+            return Err(ServiceError::new(format!(
+                "all {} entries failed: {}",
+                total,
+                errors.join("; ")
+            )));
+        }
+
+        Ok(CaptureBatchResponse { stored, errors })
     }
 }
 

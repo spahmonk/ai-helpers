@@ -192,6 +192,19 @@ fn cli_capture_batch_rejects_invalid_json() {
 }
 
 #[test]
+fn cli_capture_batch_rejects_entry_missing_required_field() {
+    let root = workspace_root();
+    // Array is valid JSON, but entry is missing "content" — required field
+    let result = run_cli_with_stdin(
+        &["capture-batch", "--root", root.to_str().unwrap()],
+        r#"[{"level":"semantic","title":"no content here"}]"#,
+    );
+
+    assert_eq!(result.exit_code, 1);
+    assert!(result.output.contains("Error") || result.output.contains("failed"));
+}
+
+#[test]
 fn cli_project_summary_shows_counts() {
     let root = workspace_root();
     let _ = run_cli_with_stdin(
