@@ -38,10 +38,35 @@ impl Error for EmbedError {
     }
 }
 
-pub fn cosine_similarity(left: &[f32], right: &[f32]) -> Result<f32, EmbedError> {
-    if left.is_empty() || right.is_empty() {
+pub fn validate_embedding(vector: &[f32]) -> Result<(), EmbedError> {
+    if vector.is_empty() {
         return Err(EmbedError::InvalidVector("embedding vectors must not be empty"));
     }
+
+    let mut norm = 0.0f32;
+
+    for value in vector {
+        if !value.is_finite() {
+            return Err(EmbedError::InvalidVector(
+                "embedding vectors must contain only finite values",
+            ));
+        }
+
+        norm += value * value;
+    }
+
+    if norm == 0.0 {
+        return Err(EmbedError::InvalidVector(
+            "embedding vectors must have non-zero magnitude",
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn cosine_similarity(left: &[f32], right: &[f32]) -> Result<f32, EmbedError> {
+    validate_embedding(left)?;
+    validate_embedding(right)?;
 
     if left.len() != right.len() {
         return Err(EmbedError::InvalidVector(
@@ -57,12 +82,6 @@ pub fn cosine_similarity(left: &[f32], right: &[f32]) -> Result<f32, EmbedError>
         dot += left_value * right_value;
         left_norm += left_value * left_value;
         right_norm += right_value * right_value;
-    }
-
-    if left_norm == 0.0 || right_norm == 0.0 {
-        return Err(EmbedError::InvalidVector(
-            "embedding vectors must have non-zero magnitude",
-        ));
     }
 
     Ok(dot / (left_norm.sqrt() * right_norm.sqrt()))

@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection};
 
-use crate::core::embed::{EmbedError, Embedder};
+use crate::core::embed::{validate_embedding, EmbedError, Embedder};
 use crate::core::project::ProjectScope;
 use crate::core::retrieval::{search_semantic, SearchHit, SearchInput};
 use crate::core::schema;
@@ -166,7 +166,10 @@ impl MemoryStore {
                 let searchable_text = format!("{title}\n{content}\n{}", tags.join(" "));
                 let maybe_embedding = match self.embedder.as_deref() {
                     Some(embedder) => match embedder.embed(&searchable_text) {
-                        Ok(embedding) => Some(embedding),
+                        Ok(embedding) => {
+                            validate_embedding(&embedding)?;
+                            Some(embedding)
+                        }
                         Err(EmbedError::Unavailable(_)) => None,
                         Err(error) => return Err(error.into()),
                     },

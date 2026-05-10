@@ -77,6 +77,14 @@ impl Embedder for InvalidEmbedder {
     }
 }
 
+struct EmptyVectorEmbedder;
+
+impl Embedder for EmptyVectorEmbedder {
+    fn embed(&self, _input: &str) -> Result<Vec<f32>, EmbedError> {
+        Ok(vec![])
+    }
+}
+
 fn explicit_semantic(title: &str, content: &str) -> RememberInput {
     RememberInput {
         level: MemoryLevel::Semantic,
@@ -92,6 +100,23 @@ fn set_semantic_created_at(scope: &ProjectScope, title: &str, created_at: &str) 
     conn.execute(
         "UPDATE semantic_memories SET created_at = ?1, updated_at = ?1 WHERE project_id = ?2 AND title = ?3",
         params![created_at, scope.project_id, title],
+    )
+    .unwrap();
+}
+
+fn set_semantic_embedding_json(scope: &ProjectScope, title: &str, embedding_json: &str) {
+    let conn = Connection::open(&scope.database_path).unwrap();
+    conn.execute(
+        "
+        UPDATE semantic_embeddings
+        SET embedding_json = ?1
+        WHERE memory_id = (
+            SELECT id
+            FROM semantic_memories
+            WHERE project_id = ?2 AND title = ?3
+        )
+        ",
+        params![embedding_json, scope.project_id, title],
     )
     .unwrap();
 }
@@ -277,6 +302,44 @@ fn search_uses_embedding_signal_when_lexical_scores_tie() {
 }
 
 #[test]
+fn search_returns_vector_only_matches_without_lexical_overlap() {
+    let fixture = MemoryFixture::new();
+    let store = fixture.store_with_embedder(Arc::new(TestEmbedder));
+
+    store
+        .remember(RememberInput {
+            level: MemoryLevel::Semantic,
+            title: "Platform note A".into(),
+            content: "Rooted behavior should be explained clearly".into(),
+            tags: vec!["platform".into()],
+            source: MemorySource::Explicit,
+        })
+        .unwrap();
+
+    store
+        .remember(RememberInput {
+            level: MemoryLevel::Semantic,
+            title: "Platform note B".into(),
+            content: "Rooted behavior should be explained clearly".into(),
+            tags: vec!["server".into()],
+            source: MemorySource::Explicit,
+        })
+        .unwrap();
+
+    let hits = store
+        .search(SearchInput {
+            query: "windows drive-relative path".into(),
+            limit: 5,
+            level: None,
+            tags: vec!["platform".into()],
+        })
+        .unwrap();
+
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].title.as_deref(), Some("Platform note A"));
+}
+
+#[test]
 fn search_falls_back_to_lexical_ranking_when_embeddings_are_unavailable() {
     let fixture = MemoryFixture::new();
     let store = fixture.store_with_embedder(Arc::new(UnavailableEmbedder));
@@ -374,6 +437,59 @@ fn search_surfaces_non_unavailable_embedder_errors() {
         .unwrap_err();
 
     assert!(error.to_string().contains("bad embedding"));
+}
+
+#[test]
+fn search_skips_malformed_stored_embeddings_instead_of_failing() {
+    let fixture = MemoryFixture::new();
+    let store = fixture.store_with_embedder(Arc::new(TestEmbedder));
+
+    store
+        .remember(explicit_semantic(
+            "Drive-relative note",
+            "Drive-relative paths should be documented for Windows users",
+        ))
+        .unwrap();
+
+    store
+        .remember(explicit_semantic(
+            "Broken embedding note",
+            "Drive-relative paths should be documented for Windows users",
+        ))
+        .unwrap();
+
+    set_semantic_embedding_json(&fixture.scope, "Broken embedding note", "[]");
+
+    let hits = store
+        .search(SearchInput {
+            query: "drive-relative windows path".into(),
+            limit: 5,
+            level: None,
+            tags: vec![],
+        })
+        .unwrap();
+
+    assert!(hits
+        .iter()
+        .any(|hit| hit.title.as_deref() == Some("Drive-relative note")));
+}
+
+#[test]
+fn remember_rejects_invalid_embeddings_before_persisting() {
+    let fixture = MemoryFixture::new();
+    let store = fixture.store_with_embedder(Arc::new(EmptyVectorEmbedder));
+
+    let error = store
+        .remember(explicit_semantic(
+            "Windows root hint",
+            "Drive-relative paths like \\.aws should be explained clearly",
+        ))
+        .unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("embedding vectors must not be empty"));
+    assert_eq!(fixture.store().stats().unwrap().semantic_count, 0);
 }
 
 #[test]
