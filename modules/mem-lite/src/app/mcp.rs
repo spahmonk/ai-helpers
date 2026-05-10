@@ -310,16 +310,18 @@ where
             .or_else(|| params.as_object())
             .ok_or_else(|| boxed_error("Missing arguments"))?;
 
-        let result = match name {
+        // Unknown tool name is a protocol error → propagate as Err so run() emits a
+        // JSON-RPC error object (code -32601) rather than a successful isError response.
+        let call_result: Result<String, String> = match name {
             "remember" => self.call_remember(arguments),
             "search" => self.call_search(arguments),
             "recent" => self.call_recent(arguments),
             "stats" => self.call_stats(arguments),
             "project_info" => self.call_project_info(arguments),
-            _ => Err("Unknown tool".to_string()),
+            _ => return Err(boxed_error("Unknown tool")),
         };
 
-        match result {
+        match call_result {
             Ok(text) => Ok(json!({
                 "jsonrpc": "2.0",
                 "result": {
@@ -470,11 +472,11 @@ fn argument_optional_string(
     key: &str,
 ) -> Result<Option<String>, String> {
     match arguments.get(key) {
+        None | Some(Value::Null) => Ok(None),
         Some(value) => value
             .as_str()
             .map(|value| Some(value.to_string()))
             .ok_or_else(|| format!("invalid {key}")),
-        None => Ok(None),
     }
 }
 

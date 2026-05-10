@@ -14,7 +14,9 @@ fn test_home() -> PathBuf {
             .join("target")
             .join("mem-lite-test-home");
         fs::create_dir_all(&path).unwrap();
-        std::env::set_var("MEM_LITE_HOME", &path);
+        // Do NOT call set_var here: all CLI tests pass --root explicitly, so
+        // MEM_LITE_HOME is never consulted in production paths, and set_var
+        // races with concurrent test threads reading the environment.
         path
     })
     .clone()

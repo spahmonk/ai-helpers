@@ -176,11 +176,15 @@ impl MemoryStore {
             MemoryLevel::Semantic => {
                 let tags_json = serde_json::to_string(&tags)?;
                 let searchable_text = format!("{title}\n{content}\n{}", tags.join(" "));
+                let mut embedder_identity: Option<&'static str> = None;
+                let mut should_record_embedder_identity = false;
                 let maybe_embedding = match self.embedder.as_deref() {
                     Some(embedder) => match embedder.embed(&searchable_text) {
                         Ok(embedding) => {
                             validate_embedding(&embedding)?;
-                            self.ensure_embedder_identity_for_write(embedder.identity())?;
+                            embedder_identity = Some(embedder.identity());
+                            should_record_embedder_identity =
+                                self.ensure_embedder_identity_for_write(embedder.identity())?;
                             Some(embedding)
                         }
                         Err(EmbedError::Unavailable(_)) => None,
@@ -217,6 +221,18 @@ impl MemoryStore {
                         ) VALUES (?1, ?2, ?3)",
                         params![id, serde_json::to_string(&embedding)?, timestamp],
                     )?;
+
+                    if should_record_embedder_identity {
+                        tx.execute(
+                            "INSERT INTO store_metadata (key, value)
+                             VALUES (?1, ?2)
+                             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                            params![
+                                SEMANTIC_EMBEDDER_IDENTITY_KEY,
+                                embedder_identity.expect("embedder identity set when recording")
+                            ],
+                        )?;
+                    }
                 }
 
                 tx.commit()?;
@@ -287,9 +303,14 @@ impl MemoryStore {
         let embedder = self.embedder.as_deref().ok_or(StoreError::InvalidInput(
             "backfill_embeddings requires an embedder",
         ))?;
-        self.ensure_embedder_identity_for_write(embedder.identity())?;
 
         let pending_rows = self.pending_semantic_backfill_rows()?;
+        if pending_rows.is_empty() {
+            return Ok(0);
+        }
+
+        let should_record_embedder_identity =
+            self.ensure_embedder_identity_for_write(embedder.identity())?;
         let mut pending_embeddings = Vec::with_capacity(pending_rows.len());
 
         for (memory_id, title, content, tags_json, created_at) in pending_rows {
@@ -308,6 +329,15 @@ impl MemoryStore {
                     memory_id, embedding_json, created_at
                 ) VALUES (?1, ?2, ?3)",
                 params![memory_id, embedding_json, created_at],
+            )?;
+        }
+
+        if should_record_embedder_identity {
+            tx.execute(
+                "INSERT INTO store_metadata (key, value)
+                 VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![SEMANTIC_EMBEDDER_IDENTITY_KEY, embedder.identity()],
             )?;
         }
 
@@ -356,9 +386,9 @@ impl MemoryStore {
         })
     }
 
-    fn ensure_embedder_identity_for_write(&self, identity: &str) -> Result<(), StoreError> {
+    fn ensure_embedder_identity_for_write(&self, identity: &str) -> Result<bool, StoreError> {
         match self.recorded_embedder_identity()? {
-            Some(recorded_identity) if recorded_identity == identity => Ok(()),
+            Some(recorded_identity) if recorded_identity == identity => Ok(false),
             Some(recorded_identity) => Err(StoreError::EmbedderIdentityMismatch {
                 expected: recorded_identity,
                 actual: identity.to_string(),
@@ -366,7 +396,7 @@ impl MemoryStore {
             None if self.any_semantic_embeddings_exist()? => {
                 Err(StoreError::MissingEmbedderIdentity)
             }
-            None => self.set_recorded_embedder_identity(identity),
+            None => Ok(true),
         }
     }
 
@@ -391,16 +421,6 @@ impl MemoryStore {
             )
             .ok();
         Ok(identity)
-    }
-
-    fn set_recorded_embedder_identity(&self, identity: &str) -> Result<(), StoreError> {
-        self.conn.execute(
-            "INSERT INTO store_metadata (key, value)
-             VALUES (?1, ?2)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            params![SEMANTIC_EMBEDDER_IDENTITY_KEY, identity],
-        )?;
-        Ok(())
     }
 
     fn any_semantic_embeddings_exist(&self) -> Result<bool, StoreError> {

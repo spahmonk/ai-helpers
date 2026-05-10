@@ -728,6 +728,42 @@ fn search_remains_read_only_when_embeddings_are_missing() {
 }
 
 #[test]
+fn remember_records_embedder_identity_after_successful_semantic_write() {
+    let fixture = MemoryFixture::new();
+    let store = fixture.store_with_embedder(Arc::new(TestEmbedder));
+
+    store
+        .remember(explicit_semantic(
+            "Identity note",
+            "Semantic embeddings should persist cleanly",
+        ))
+        .unwrap();
+
+    assert_eq!(
+        semantic_embedding_count(&fixture.scope, "Identity note"),
+        1
+    );
+    assert_eq!(
+        metadata_value(&fixture.scope, "semantic_embedder_identity").as_deref(),
+        Some("test-embedder")
+    );
+}
+
+#[test]
+fn backfill_embeddings_on_empty_store_leaves_identity_unset() {
+    let fixture = MemoryFixture::new();
+    let store = fixture.store_with_embedder(Arc::new(TestEmbedder));
+
+    let inserted = store.backfill_embeddings().unwrap();
+
+    assert_eq!(inserted, 0);
+    assert_eq!(
+        metadata_value(&fixture.scope, "semantic_embedder_identity"),
+        None
+    );
+}
+
+#[test]
 fn backfill_embeddings_populates_missing_embeddings_after_reopen() {
     let fixture = MemoryFixture::new();
     fixture
