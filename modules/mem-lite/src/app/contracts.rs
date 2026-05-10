@@ -1,6 +1,8 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ServiceError {
     pub message: String,
@@ -71,6 +73,45 @@ pub struct RememberRequest {
     pub level: MemoryLevel,
     pub tags: Vec<String>,
     pub root: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CaptureBatchLevel {
+    Semantic,
+    Episodic,
+    Procedural,
+}
+
+impl CaptureBatchLevel {
+    pub fn as_memory_level(&self) -> MemoryLevel {
+        match self {
+            Self::Semantic => MemoryLevel::Semantic,
+            Self::Episodic => MemoryLevel::Episodic,
+            Self::Procedural => MemoryLevel::Procedural,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CaptureBatchEntry {
+    pub level: CaptureBatchLevel,
+    #[serde(default)]
+    pub title: Option<String>,
+    pub content: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CaptureBatchRequest {
+    pub entries: Vec<CaptureBatchEntry>,
+    pub root: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CaptureBatchResponse {
+    pub stored: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -174,4 +215,28 @@ pub trait RecentService {
 
 pub trait StatsService {
     fn stats(&self, request: StatsRequest) -> Result<StatsResponse, ServiceError>;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProjectSummaryRequest {
+    pub root: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProjectSummaryResponse {
+    pub summary: String,
+}
+
+pub trait CaptureBatchService {
+    fn capture_batch(
+        &self,
+        request: CaptureBatchRequest,
+    ) -> Result<CaptureBatchResponse, ServiceError>;
+}
+
+pub trait ProjectSummaryService {
+    fn project_summary(
+        &self,
+        request: ProjectSummaryRequest,
+    ) -> Result<ProjectSummaryResponse, ServiceError>;
 }

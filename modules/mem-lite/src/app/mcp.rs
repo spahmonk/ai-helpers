@@ -2,8 +2,10 @@ use serde_json::{json, Value};
 use std::io::{self, BufRead, BufReader, Write};
 
 use crate::app::contracts::{
-    InitService, MemoryLevel, ProjectInfoRequest, ProjectInfoService, RecentRequest, RecentService,
-    RememberRequest, RememberService, SearchRequest, SearchService, StatsRequest, StatsService,
+    CaptureBatchEntry, CaptureBatchRequest, CaptureBatchService, InitService, MemoryLevel,
+    ProjectInfoRequest, ProjectInfoService, ProjectSummaryRequest, ProjectSummaryService,
+    RecentRequest, RecentService, RememberRequest, RememberService, SearchRequest, SearchService,
+    StatsRequest, StatsService,
 };
 
 #[derive(Clone, Copy)]
@@ -28,7 +30,9 @@ where
         + RememberService
         + SearchService
         + RecentService
-        + StatsService,
+        + StatsService
+        + CaptureBatchService
+        + ProjectSummaryService,
 {
     services: S,
 }
@@ -40,7 +44,9 @@ where
         + RememberService
         + SearchService
         + RecentService
-        + StatsService,
+        + StatsService
+        + CaptureBatchService
+        + ProjectSummaryService,
 {
     pub fn new(services: S) -> Self {
         Self { services }
@@ -262,6 +268,26 @@ where
                         },
                         "required": ["content"]
                     })),
+                    tool_schema("capture_batch", "Store a batch of memories", json!({
+                        "type": "object",
+                        "properties": {
+                            "entries": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "level": { "type": "string", "enum": ["semantic", "episodic", "procedural"] },
+                                        "title": { "type": ["string", "null"] },
+                                        "content": { "type": "string" },
+                                        "tags": { "type": "array", "items": { "type": "string" } }
+                                    },
+                                    "required": ["level", "content"]
+                                }
+                            },
+                            "root": { "type": "string" }
+                        },
+                        "required": ["entries"]
+                    })),
                     tool_schema("search", "Search semantic memories", json!({
                         "type": "object",
                         "properties": {
@@ -291,6 +317,12 @@ where
                             "root": { "type": "string" }
                         }
                     })),
+                    tool_schema("project_summary", "Summarize project memories", json!({
+                        "type": "object",
+                        "properties": {
+                            "root": { "type": "string" }
+                        }
+                    })),
                 ]
             }
         }))
@@ -314,10 +346,12 @@ where
         // JSON-RPC error object (code -32601) rather than a successful isError response.
         let call_result: Result<String, String> = match name {
             "remember" => self.call_remember(arguments),
+            "capture_batch" => self.call_capture_batch(arguments),
             "search" => self.call_search(arguments),
             "recent" => self.call_recent(arguments),
             "stats" => self.call_stats(arguments),
             "project_info" => self.call_project_info(arguments),
+            "project_summary" => self.call_project_summary(arguments),
             _ => return Err(boxed_error("Unknown tool")),
         };
 
@@ -370,6 +404,24 @@ where
             "Stored {} memory in project {}",
             response.level, response.project_id
         ))
+    }
+
+    fn call_capture_batch(
+        &self,
+        arguments: &serde_json::Map<String, Value>,
+    ) -> Result<String, String> {
+        let entries_value = arguments
+            .get("entries")
+            .ok_or_else(|| "Missing entries".to_string())?;
+        let entries: Vec<CaptureBatchEntry> = serde_json::from_value(entries_value.clone())
+            .map_err(|error| error.to_string())?;
+        let root = argument_optional_string(arguments, "root")?;
+        let response = self
+            .services
+            .capture_batch(CaptureBatchRequest { entries, root })
+            .map_err(|error| error.message)?;
+
+        Ok(format!("Captured {} memories", response.stored))
     }
 
     fn call_search(
@@ -441,6 +493,19 @@ where
             response.project_id,
             response.database_path.display()
         ))
+    }
+
+    fn call_project_summary(
+        &self,
+        arguments: &serde_json::Map<String, Value>,
+    ) -> Result<String, String> {
+        let root = argument_optional_string(arguments, "root")?;
+        let response = self
+            .services
+            .project_summary(ProjectSummaryRequest { root })
+            .map_err(|error| error.message)?;
+
+        Ok(response.summary)
     }
 }
 

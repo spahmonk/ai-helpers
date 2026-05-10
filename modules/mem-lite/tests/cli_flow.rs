@@ -42,6 +42,16 @@ fn run_cli(args: &[&str]) -> mem_lite::app::CliResult {
     cli.run(args.iter().map(|arg| arg.to_string()).collect())
 }
 
+fn run_cli_with_stdin(args: &[&str], stdin: &str) -> mem_lite::app::CliResult {
+    let _ = test_home();
+    let services = MemoryServiceAdapter::default();
+    let cli = CliAdapter::new(services);
+    cli.run_with_stdin(
+        args.iter().map(|arg| arg.to_string()).collect(),
+        stdin.to_string(),
+    )
+}
+
 #[test]
 fn cli_init_creates_project() {
     let root = workspace_root();
@@ -147,4 +157,71 @@ fn cli_error_on_invalid_level() {
     ]);
     assert_eq!(result.exit_code, 1);
     assert!(result.output.contains("invalid level"));
+}
+
+#[test]
+fn cli_capture_batch_stores_entries() {
+    let root = workspace_root();
+    let result = run_cli_with_stdin(
+        &["capture-batch", "--root", root.to_str().unwrap()],
+        r#"[
+  {"level":"semantic","title":"batch semantic","content":"semantic content","tags":["a","b"]},
+  {"level":"episodic","title":"batch event","content":"episodic content"}
+]"#,
+    );
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.output.trim(), "Captured 2 memories");
+
+    let recent = run_cli(&["recent", "--root", root.to_str().unwrap()]);
+    assert_eq!(recent.exit_code, 0);
+    assert!(recent.output.contains("batch semantic"));
+    assert!(recent.output.contains("batch event"));
+}
+
+#[test]
+fn cli_capture_batch_rejects_invalid_json() {
+    let root = workspace_root();
+    let result = run_cli_with_stdin(
+        &["capture-batch", "--root", root.to_str().unwrap()],
+        r#"{"level":"semantic"}"#,
+    );
+
+    assert_eq!(result.exit_code, 1);
+    assert!(result.output.contains("Error"));
+}
+
+#[test]
+fn cli_project_summary_shows_counts() {
+    let root = workspace_root();
+    let _ = run_cli_with_stdin(
+        &["capture-batch", "--root", root.to_str().unwrap()],
+        r#"[
+  {"level":"semantic","title":"summary semantic","content":"semantic content"},
+  {"level":"procedural","title":"summary procedure","content":"procedure content"}
+]"#,
+    );
+
+    let summary = run_cli(&["project-summary", "--root", root.to_str().unwrap()]);
+    assert_eq!(summary.exit_code, 0);
+    assert!(summary.output.contains("1 semantic"));
+    assert!(summary.output.contains("1 procedural"));
+}
+
+#[test]
+fn cli_project_summary_includes_recent_titles() {
+    let root = workspace_root();
+    let title = "summary recent title";
+    let _ = run_cli(&[
+        "remember",
+        "summary recent content",
+        "--title",
+        title,
+        "--root",
+        root.to_str().unwrap(),
+    ]);
+
+    let summary = run_cli(&["project-summary", "--root", root.to_str().unwrap()]);
+    assert_eq!(summary.exit_code, 0);
+    assert!(summary.output.contains(title));
 }

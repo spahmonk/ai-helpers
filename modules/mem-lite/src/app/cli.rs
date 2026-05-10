@@ -1,10 +1,12 @@
 use crate::app::contracts::{
-    InitRequest, MemoryLevel, ProjectInfoRequest, RecentRequest, RememberRequest, SearchRequest,
-    StatsRequest,
+    CaptureBatchEntry, CaptureBatchRequest, CaptureBatchService, InitRequest, MemoryLevel,
+    ProjectInfoRequest, ProjectSummaryRequest, ProjectSummaryService, RecentRequest,
+    RememberRequest, SearchRequest, StatsRequest,
 };
 use crate::app::contracts::{
     InitService, ProjectInfoService, RecentService, RememberService, SearchService, StatsService,
 };
+use std::io::Read;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CliResult {
@@ -14,20 +16,42 @@ pub struct CliResult {
 
 pub struct CliAdapter<S>
 where
-    S: InitService + ProjectInfoService + RememberService + SearchService + RecentService + StatsService,
+    S: InitService
+        + ProjectInfoService
+        + RememberService
+        + SearchService
+        + RecentService
+        + StatsService
+        + CaptureBatchService
+        + ProjectSummaryService,
 {
     services: S,
 }
 
 impl<S> CliAdapter<S>
 where
-    S: InitService + ProjectInfoService + RememberService + SearchService + RecentService + StatsService,
+    S: InitService
+        + ProjectInfoService
+        + RememberService
+        + SearchService
+        + RecentService
+        + StatsService
+        + CaptureBatchService
+        + ProjectSummaryService,
 {
     pub fn new(services: S) -> Self {
         Self { services }
     }
 
     pub fn run(&self, args: Vec<String>) -> CliResult {
+        self.run_inner(args, None)
+    }
+
+    pub fn run_with_stdin(&self, args: Vec<String>, stdin_content: String) -> CliResult {
+        self.run_inner(args, Some(&stdin_content))
+    }
+
+    fn run_inner(&self, args: Vec<String>, stdin_content: Option<&str>) -> CliResult {
         let Some(command) = args.first().map(String::as_str) else {
             return CliResult {
                 output: help_text(),
@@ -42,6 +66,8 @@ where
             "recent" => self.handle_recent(&args[1..]),
             "stats" => self.handle_stats(&args[1..]),
             "project-info" => self.handle_project_info(&args[1..]),
+            "capture-batch" => self.handle_capture_batch(&args[1..], stdin_content),
+            "project-summary" => self.handle_project_summary(&args[1..]),
             "--help" | "-h" => CliResult {
                 output: help_text(),
                 exit_code: 0,
@@ -289,6 +315,51 @@ where
             Err(message) => error_result(message),
         }
     }
+
+    fn handle_capture_batch(&self, args: &[String], stdin_content: Option<&str>) -> CliResult {
+        let root = match parse_root_only(args) {
+            Ok(root) => root,
+            Err(message) => return error_result(message),
+        };
+
+        let input = match stdin_content {
+            Some(content) => content.to_string(),
+            None => {
+                let mut buffer = String::new();
+                if let Err(error) = std::io::stdin().read_to_string(&mut buffer) {
+                    return error_result(error.to_string());
+                }
+                buffer
+            }
+        };
+
+        let entries: Vec<CaptureBatchEntry> = match serde_json::from_str(&input) {
+            Ok(entries) => entries,
+            Err(error) => return error_result(error.to_string()),
+        };
+
+        match self.services.capture_batch(CaptureBatchRequest { entries, root }) {
+            Ok(response) => CliResult {
+                output: format!("Captured {} memories\n", response.stored),
+                exit_code: 0,
+            },
+            Err(error) => error_result(error.message),
+        }
+    }
+
+    fn handle_project_summary(&self, args: &[String]) -> CliResult {
+        match parse_root_only(args).and_then(|root| {
+            self.services
+                .project_summary(ProjectSummaryRequest { root })
+                .map_err(|error| error.message)
+        }) {
+            Ok(response) => CliResult {
+                output: format!("{}\n", response.summary),
+                exit_code: 0,
+            },
+            Err(message) => error_result(message),
+        }
+    }
 }
 
 fn parse_root_only(args: &[String]) -> Result<Option<String>, String> {
@@ -376,5 +447,5 @@ fn error_result(message: String) -> CliResult {
 }
 
 fn help_text() -> String {
-    "mem-lite commands:\n  init [--root <dir>]\n  remember <content> [--title <title>] [--level semantic|episodic|procedural] [--tags tag1,tag2] [--root <dir>]\n  search <query> [--limit N] [--tags tag1,tag2] [--root <dir>]\n  recent [--limit N] [--root <dir>]\n  stats [--root <dir>]\n  project-info [--root <dir>]\n".to_string()
+    "mem-lite commands:\n  init [--root <dir>]\n  remember <content> [--title <title>] [--level semantic|episodic|procedural] [--tags tag1,tag2] [--root <dir>]\n  capture-batch [--root <dir>]\n  search <query> [--limit N] [--tags tag1,tag2] [--root <dir>]\n  recent [--limit N] [--root <dir>]\n  stats [--root <dir>]\n  project-info [--root <dir>]\n  project-summary [--root <dir>]\n".to_string()
 }

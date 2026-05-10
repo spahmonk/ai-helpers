@@ -99,6 +99,37 @@ impl RememberService for MemoryServiceAdapter {
     }
 }
 
+impl CaptureBatchService for MemoryServiceAdapter {
+    fn capture_batch(
+        &self,
+        request: CaptureBatchRequest,
+    ) -> Result<CaptureBatchResponse, ServiceError> {
+        let (_scope, store) = Self::open_store(request.root.as_deref())?;
+        let mut stored = 0usize;
+
+        for entry in request.entries {
+            let input = RememberInput {
+                level: match entry.level.as_memory_level() {
+                    MemoryLevel::Semantic => CoreMemoryLevel::Semantic,
+                    MemoryLevel::Episodic => CoreMemoryLevel::Episodic,
+                    MemoryLevel::Procedural => CoreMemoryLevel::Procedural,
+                },
+                title: Self::summarize_title(entry.title, &entry.content),
+                content: entry.content,
+                tags: entry.tags,
+                source: MemorySource::Explicit,
+            };
+
+            store
+                .remember(input)
+                .map_err(|error| ServiceError::new(error.to_string()))?;
+            stored += 1;
+        }
+
+        Ok(CaptureBatchResponse { stored })
+    }
+}
+
 impl SearchService for MemoryServiceAdapter {
     fn search(&self, request: SearchRequest) -> Result<SearchResponse, ServiceError> {
         let (_scope, store) = Self::open_store(request.root.as_deref())?;
@@ -166,6 +197,63 @@ impl StatsService for MemoryServiceAdapter {
                 procedural_count: stats.procedural_count,
             },
         })
+    }
+}
+
+impl ProjectSummaryService for MemoryServiceAdapter {
+    fn project_summary(
+        &self,
+        request: ProjectSummaryRequest,
+    ) -> Result<ProjectSummaryResponse, ServiceError> {
+        let (scope, store) = Self::open_store(request.root.as_deref())?;
+        let stats = store
+            .stats()
+            .map_err(|error| ServiceError::new(error.to_string()))?;
+        let recent = store
+            .recent(10)
+            .map_err(|error| ServiceError::new(error.to_string()))?;
+
+        let mut summary = format!(
+            "Project: {}\nWorkspace: {}\nMemory: {} semantic, {} episodic, {} procedural entries\n\nRecent:",
+            scope.project_id,
+            scope.workspace_root.display(),
+            stats.semantic_count,
+            stats.episodic_count,
+            stats.procedural_count
+        );
+
+        if recent.is_empty() {
+            summary.push_str("\n- none");
+        } else {
+            for memory in recent {
+                let level = match memory.level {
+                    CoreMemoryLevel::Semantic => "semantic",
+                    CoreMemoryLevel::Episodic => "episodic",
+                    CoreMemoryLevel::Procedural => "procedural",
+                };
+                let title = memory.title.trim();
+                let title = if title.is_empty() { "(untitled)" } else { title };
+                let snippet = memory
+                    .content
+                    .split_whitespace()
+                    .take(18)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                if snippet.is_empty() {
+                    summary.push_str(&format!(
+                        "\n- [{}] \"{}\" ({})",
+                        level, title, memory.created_at
+                    ));
+                } else {
+                    summary.push_str(&format!(
+                        "\n- [{}] \"{}\" ({}) — {}",
+                        level, title, memory.created_at, snippet
+                    ));
+                }
+            }
+        }
+
+        Ok(ProjectSummaryResponse { summary })
     }
 }
 
