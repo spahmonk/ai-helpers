@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 use rusqlite::{params, Connection};
 
-use crate::core::embed::{cosine_similarity, validate_embedding, Embedder};
+use crate::core::embed::{cosine_similarity, validate_embedding, EmbedError, Embedder};
 use crate::core::store::{MemoryLevel, StoreError};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,6 +60,10 @@ pub fn search_semantic(
         None => None,
     };
 
+    if let (Some(provider), Some(_)) = (embedder, query_embedding.as_ref()) {
+        backfill_missing_embeddings(conn, project_id, provider)?;
+    }
+
     let required_tags = normalized_tag_set(&input.tags);
     let vector_scores = vector_candidate_scores(
         conn,
@@ -76,12 +80,10 @@ pub fn search_semantic(
         JOIN semantic_memories sm ON sm.id = semantic_fts.memory_id
         WHERE semantic_fts MATCH ?1
           AND sm.project_id = ?2
-        ORDER BY sm.created_at DESC
-        LIMIT ?3
         ",
     )?;
 
-    let rows = statement.query_map(params![fts_query, project_id, candidate_limit(input.limit)], |row| {
+    let rows = statement.query_map(params![fts_query, project_id], |row| {
         let memory_id: String = row.get(0)?;
         let title: String = row.get(1)?;
         let content: String = row.get(2)?;
@@ -129,7 +131,8 @@ pub fn search_semantic(
             candidates
                 .entry(memory_id)
                 .and_modify(|candidate| {
-                    candidate.vector_score = candidate.vector_score.max(vector_candidate.vector_score);
+                    candidate.vector_score =
+                        candidate.vector_score.max(vector_candidate.vector_score);
                 })
                 .or_insert(vector_candidate);
         }
@@ -168,6 +171,60 @@ pub fn search_semantic(
         .collect())
 }
 
+fn backfill_missing_embeddings(
+    conn: &Connection,
+    project_id: &str,
+    embedder: &dyn Embedder,
+) -> Result<(), StoreError> {
+    let mut statement = conn.prepare(
+        "
+        SELECT sm.id, sm.title, sm.content, sm.tags_json, sm.created_at
+        FROM semantic_memories sm
+        LEFT JOIN semantic_embeddings se ON se.memory_id = sm.id
+        WHERE sm.project_id = ?1
+          AND se.memory_id IS NULL
+        ",
+    )?;
+
+    let rows = statement.query_map(params![project_id], |row| {
+        let memory_id: String = row.get(0)?;
+        let title: String = row.get(1)?;
+        let content: String = row.get(2)?;
+        let tags_json: String = row.get(3)?;
+        let created_at: String = row.get(4)?;
+
+        Ok((memory_id, title, content, tags_json, created_at))
+    })?;
+
+    let pending_rows = rows.collect::<Result<Vec<_>, _>>()?;
+
+    for (memory_id, title, content, tags_json, created_at) in pending_rows {
+        let tags: Vec<String> = match serde_json::from_str(&tags_json) {
+            Ok(tags) => tags,
+            Err(_) => continue,
+        };
+        let searchable_text = format!("{title}\n{content}\n{}", tags.join(" "));
+        let embedding = match embedder.embed(&searchable_text) {
+            Ok(embedding) => embedding,
+            Err(EmbedError::Unavailable(_)) => return Ok(()),
+            Err(EmbedError::InvalidVector(_)) => continue,
+        };
+
+        if validate_embedding(&embedding).is_err() {
+            continue;
+        }
+
+        conn.execute(
+            "INSERT OR IGNORE INTO semantic_embeddings (
+                memory_id, embedding_json, created_at
+            ) VALUES (?1, ?2, ?3)",
+            params![memory_id, serde_json::to_string(&embedding)?, created_at],
+        )?;
+    }
+
+    Ok(())
+}
+
 fn vector_candidate_scores(
     conn: &Connection,
     project_id: &str,
@@ -196,7 +253,14 @@ fn vector_candidate_scores(
         let created_at: String = row.get(4)?;
         let embedding_json: String = row.get(5)?;
 
-        Ok((memory_id, title, content, tags_json, created_at, embedding_json))
+        Ok((
+            memory_id,
+            title,
+            content,
+            tags_json,
+            created_at,
+            embedding_json,
+        ))
     })?;
 
     let mut candidates = Vec::new();
@@ -311,7 +375,11 @@ fn normalized_tag_set(tags: &[String]) -> HashSet<String> {
 
 fn sorted_indices_by_recency(candidates: &[Candidate]) -> Vec<usize> {
     let mut indices = (0..candidates.len()).collect::<Vec<_>>();
-    indices.sort_by(|left, right| candidates[*right].created_at.cmp(&candidates[*left].created_at));
+    indices.sort_by(|left, right| {
+        candidates[*right]
+            .created_at
+            .cmp(&candidates[*left].created_at)
+    });
     indices
 }
 

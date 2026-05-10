@@ -121,6 +121,24 @@ fn set_semantic_embedding_json(scope: &ProjectScope, title: &str, embedding_json
     .unwrap();
 }
 
+fn semantic_embedding_count(scope: &ProjectScope, title: &str) -> i64 {
+    let conn = Connection::open(&scope.database_path).unwrap();
+    conn.query_row(
+        "
+        SELECT COUNT(*)
+        FROM semantic_embeddings
+        WHERE memory_id = (
+            SELECT id
+            FROM semantic_memories
+            WHERE project_id = ?1 AND title = ?2
+        )
+        ",
+        params![scope.project_id, title],
+        |row| row.get::<_, i64>(0),
+    )
+    .unwrap()
+}
+
 fn set_procedural_created_at(scope: &ProjectScope, name: &str, created_at: &str) {
     let conn = Connection::open(&scope.database_path).unwrap();
     conn.execute(
@@ -299,6 +317,55 @@ fn search_uses_embedding_signal_when_lexical_scores_tie() {
         .unwrap();
 
     assert_eq!(hits[0].title.as_deref(), Some("Platform note A"));
+}
+
+#[test]
+fn search_keeps_older_stronger_lexical_match_after_scoring() {
+    let fixture = MemoryFixture::new();
+    let store = fixture.store();
+
+    store
+        .remember(explicit_semantic(
+            "Windows drive relative path note",
+            "Windows drive relative path behavior needs careful explanation",
+        ))
+        .unwrap();
+
+    for index in 0..8 {
+        store
+            .remember(explicit_semantic(
+                &format!("Recent weak lexical note {index}"),
+                "Path reminder for users",
+            ))
+            .unwrap();
+    }
+
+    set_semantic_created_at(
+        &fixture.scope,
+        "Windows drive relative path note",
+        "00000000000000000001",
+    );
+    for index in 0..8 {
+        set_semantic_created_at(
+            &fixture.scope,
+            &format!("Recent weak lexical note {index}"),
+            &format!("{:020}", index + 2),
+        );
+    }
+
+    let hits = store
+        .search(SearchInput {
+            query: "windows drive relative path".into(),
+            limit: 1,
+            level: None,
+            tags: vec![],
+        })
+        .unwrap();
+
+    assert_eq!(
+        hits[0].title.as_deref(),
+        Some("Windows drive relative path note")
+    );
 }
 
 #[test]
@@ -505,7 +572,9 @@ fn remember_populates_fts_and_embedding_storage() {
 
     let conn = Connection::open(&fixture.scope.database_path).unwrap();
     let fts_count = conn
-        .query_row("SELECT COUNT(*) FROM semantic_fts", [], |row| row.get::<_, i64>(0))
+        .query_row("SELECT COUNT(*) FROM semantic_fts", [], |row| {
+            row.get::<_, i64>(0)
+        })
         .unwrap();
     let embedding_count = conn
         .query_row("SELECT COUNT(*) FROM semantic_embeddings", [], |row| {
@@ -539,6 +608,39 @@ fn search_falls_back_to_lexical_ranking_after_reopen_without_embedder() {
         .unwrap();
 
     assert_eq!(hits[0].title.as_deref(), Some("Windows root hint"));
+}
+
+#[test]
+fn search_backfills_missing_embeddings_for_existing_semantic_rows() {
+    let fixture = MemoryFixture::new();
+    fixture
+        .store()
+        .remember(explicit_semantic(
+            "Platform note A",
+            "Rooted behavior should be explained clearly",
+        ))
+        .unwrap();
+
+    assert_eq!(
+        semantic_embedding_count(&fixture.scope, "Platform note A"),
+        0
+    );
+
+    let hits = fixture
+        .store_with_embedder(Arc::new(TestEmbedder))
+        .search(SearchInput {
+            query: "windows drive-relative path".into(),
+            limit: 5,
+            level: None,
+            tags: vec![],
+        })
+        .unwrap();
+
+    assert_eq!(hits[0].title.as_deref(), Some("Platform note A"));
+    assert_eq!(
+        semantic_embedding_count(&fixture.scope, "Platform note A"),
+        1
+    );
 }
 
 #[test]
