@@ -13,7 +13,7 @@ fn different_workspace_roots_get_different_project_fingerprints() {
     assert_ne!(left_scope.database_path, right_scope.database_path);
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[test]
 fn invalid_utf8_workspace_roots_get_distinct_project_ids() {
     use std::ffi::OsString;

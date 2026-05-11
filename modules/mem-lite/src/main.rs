@@ -1,4 +1,4 @@
-use mem_lite::app::{CliAdapter, MemoryServiceAdapter, McpAdapter};
+use mem_lite::app::{CliAdapter, McpAdapter, MemoryServiceAdapter};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();

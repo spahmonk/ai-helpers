@@ -143,7 +143,9 @@ where
                 }
                 token => {
                     if content.is_some() {
-                        return error_result("remember accepts a single content argument".to_string());
+                        return error_result(
+                            "remember accepts a single content argument".to_string(),
+                        );
                     }
                     content = Some(token.to_string());
                     index += 1;
@@ -338,7 +340,10 @@ where
             Err(error) => return error_result(error.to_string()),
         };
 
-        match self.services.capture_batch(CaptureBatchRequest { entries, root }) {
+        match self
+            .services
+            .capture_batch(CaptureBatchRequest { entries, root })
+        {
             Ok(response) => {
                 let mut out = format!("Captured {} memories\n", response.stored);
                 if !response.errors.is_empty() {
@@ -350,7 +355,10 @@ where
                         out.push_str(&format!("  - {e}\n"));
                     }
                 }
-                CliResult { output: out, exit_code: 0 }
+                CliResult {
+                    output: out,
+                    exit_code: 0,
+                }
             }
             Err(error) => error_result(error.message),
         }

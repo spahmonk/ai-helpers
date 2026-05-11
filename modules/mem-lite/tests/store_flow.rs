@@ -739,10 +739,7 @@ fn remember_records_embedder_identity_after_successful_semantic_write() {
         ))
         .unwrap();
 
-    assert_eq!(
-        semantic_embedding_count(&fixture.scope, "Identity note"),
-        1
-    );
+    assert_eq!(semantic_embedding_count(&fixture.scope, "Identity note"), 1);
     assert_eq!(
         metadata_value(&fixture.scope, "semantic_embedder_identity").as_deref(),
         Some("test-embedder")
@@ -872,9 +869,7 @@ fn search_rejects_mismatched_embedder_identity_across_projects() {
         })
         .unwrap_err();
 
-    assert!(error
-        .to_string()
-        .contains("embedder identity mismatch"));
+    assert!(error.to_string().contains("embedder identity mismatch"));
     assert!(error.to_string().contains("test-embedder"));
     assert!(error.to_string().contains("alternate-embedder"));
 }

@@ -20,9 +20,8 @@ pub struct MemoryServiceAdapter;
 impl MemoryServiceAdapter {
     fn resolve_scope(root: Option<&str>) -> Result<ProjectScope, ServiceError> {
         let workspace_root = resolve_workspace_root(root)?;
-        ProjectScope::from_workspace_root(&workspace_root).map_err(|error| {
-            ServiceError::new(format!("{error}"))
-        })
+        ProjectScope::from_workspace_root(&workspace_root)
+            .map_err(|error| ServiceError::new(format!("{error}")))
     }
 
     fn open_store(root: Option<&str>) -> Result<(ProjectScope, MemoryStore), ServiceError> {
@@ -153,7 +152,11 @@ impl SearchService for MemoryServiceAdapter {
             .map_err(|error| ServiceError::new(error.to_string()))?
             .into_iter()
             .map(|hit| SearchHit {
-                id: format!("{}:{}", hit.created_at, hit.title.clone().unwrap_or_default()),
+                id: format!(
+                    "{}:{}",
+                    hit.created_at,
+                    hit.title.clone().unwrap_or_default()
+                ),
                 level: MemoryLevel::Semantic,
                 title: hit.title,
                 content: hit.content,
@@ -242,7 +245,11 @@ impl ProjectSummaryService for MemoryServiceAdapter {
                     CoreMemoryLevel::Procedural => "procedural",
                 };
                 let title = memory.title.trim();
-                let title = if title.is_empty() { "(untitled)" } else { title };
+                let title = if title.is_empty() {
+                    "(untitled)"
+                } else {
+                    title
+                };
                 let snippet = memory
                     .content
                     .split_whitespace()

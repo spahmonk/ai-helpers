@@ -121,7 +121,9 @@ where
     ) -> Result<Option<(Value, MessageFormat)>, ReadMessageError> {
         loop {
             let mut first_line = String::new();
-            let bytes = reader.read_line(&mut first_line).map_err(ReadMessageError::Io)?;
+            let bytes = reader
+                .read_line(&mut first_line)
+                .map_err(ReadMessageError::Io)?;
             if bytes == 0 {
                 return Ok(None);
             }
@@ -372,10 +374,7 @@ where
         }
     }
 
-    fn call_remember(
-        &self,
-        arguments: &serde_json::Map<String, Value>,
-    ) -> Result<String, String> {
+    fn call_remember(&self, arguments: &serde_json::Map<String, Value>) -> Result<String, String> {
         let content = argument_string(arguments, "content")?;
         let title = arguments
             .get("title")
@@ -413,8 +412,8 @@ where
         let entries_value = arguments
             .get("entries")
             .ok_or_else(|| "Missing entries".to_string())?;
-        let entries: Vec<CaptureBatchEntry> = serde_json::from_value(entries_value.clone())
-            .map_err(|error| error.to_string())?;
+        let entries: Vec<CaptureBatchEntry> =
+            serde_json::from_value(entries_value.clone()).map_err(|error| error.to_string())?;
         let root = argument_optional_string(arguments, "root")?;
         let response = self
             .services
@@ -433,10 +432,7 @@ where
         })
     }
 
-    fn call_search(
-        &self,
-        arguments: &serde_json::Map<String, Value>,
-    ) -> Result<String, String> {
+    fn call_search(&self, arguments: &serde_json::Map<String, Value>) -> Result<String, String> {
         let query = argument_string(arguments, "query")?;
         let limit = argument_usize(arguments, "limit").unwrap_or(10);
         let tags = argument_strings(arguments, "tags")?;
@@ -455,10 +451,7 @@ where
         Ok(format_search_text(&response.query, &response.hits))
     }
 
-    fn call_recent(
-        &self,
-        arguments: &serde_json::Map<String, Value>,
-    ) -> Result<String, String> {
+    fn call_recent(&self, arguments: &serde_json::Map<String, Value>) -> Result<String, String> {
         let limit = argument_usize(arguments, "limit").unwrap_or(20);
         let root = argument_optional_string(arguments, "root")?;
         let response = self
@@ -469,10 +462,7 @@ where
         Ok(format_recent_text(&response.memories))
     }
 
-    fn call_stats(
-        &self,
-        arguments: &serde_json::Map<String, Value>,
-    ) -> Result<String, String> {
+    fn call_stats(&self, arguments: &serde_json::Map<String, Value>) -> Result<String, String> {
         let root = argument_optional_string(arguments, "root")?;
         let response = self
             .services
@@ -555,7 +545,10 @@ fn argument_optional_string(
 }
 
 fn argument_usize(arguments: &serde_json::Map<String, Value>, key: &str) -> Option<usize> {
-    arguments.get(key).and_then(|value| value.as_u64()).map(|value| value as usize)
+    arguments
+        .get(key)
+        .and_then(|value| value.as_u64())
+        .map(|value| value as usize)
 }
 
 fn argument_strings(
