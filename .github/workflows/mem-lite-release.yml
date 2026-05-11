@@ -18,30 +18,36 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact_name: mem-lite
             artifact_ext: tar.gz
+            binary_dir: target/release
 
           - os: Linux ARM64
             runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             artifact_name: mem-lite
             artifact_ext: tar.gz
+            binary_dir: target/release
 
-          - os: macOS
+          - os: macOS x86_64
             runner: macos-latest
             target: x86_64-apple-darwin
             artifact_name: mem-lite
             artifact_ext: tar.gz
+            cargo_target_flag: --target x86_64-apple-darwin
+            binary_dir: target/x86_64-apple-darwin/release
 
           - os: macOS ARM64
             runner: macos-latest
             target: aarch64-apple-darwin
             artifact_name: mem-lite
             artifact_ext: tar.gz
+            binary_dir: target/release
 
           - os: Windows
             runner: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: mem-lite.exe
             artifact_ext: zip
+            binary_dir: target/release
 
     steps:
       - name: Checkout code
@@ -57,18 +63,19 @@ jobs:
         with:
           workspaces: repo
 
-      - name: Add cross-compile target (macOS ARM64)
-        if: matrix.target == 'aarch64-apple-darwin'
-        run: rustup target add aarch64-apple-darwin
+      - name: Add cross-compile target
+        if: matrix.cargo_target_flag != ''
+        working-directory: repo
+        run: rustup target add ${{ matrix.target }}
 
       - name: Build release binary
         working-directory: repo
-        run: cargo build -p mem-lite --release --bin mem-lite ${{ matrix.target == 'aarch64-apple-darwin' && '--target aarch64-apple-darwin' || '' }}
+        run: cargo build -p mem-lite --release --bin mem-lite ${{ matrix.cargo_target_flag }}
 
       - name: Strip binary (Unix)
         if: runner.os != 'Windows'
         working-directory: repo
-        run: strip target/release/mem-lite || true
+        run: strip ${{ matrix.binary_dir }}/mem-lite || true
 
       - name: Create archive (Unix)
         if: runner.os != 'Windows'
@@ -76,7 +83,7 @@ jobs:
         run: |
           tag="${{ github.ref_name }}"
           version="${tag#mem-lite-v}"
-          tar czf mem-lite-${version}-${{ matrix.target }}.tar.gz -C target/release mem-lite
+          tar czf mem-lite-${version}-${{ matrix.target }}.tar.gz -C ${{ matrix.binary_dir }} mem-lite
           cp mem-lite-${version}-${{ matrix.target }}.tar.gz $GITHUB_WORKSPACE/
 
       - name: Create archive (Windows)
@@ -87,12 +94,12 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $version = $tag.Substring("mem-lite-v".Length)
           $archive = "mem-lite-${version}-${{ matrix.target }}.zip"
-          Compress-Archive -Path "target\release\mem-lite.exe" -DestinationPath $archive -Force
+          Compress-Archive -Path "${{ matrix.binary_dir }}\mem-lite.exe" -DestinationPath $archive -Force
           Copy-Item $archive -Destination $env:GITHUB_WORKSPACE/
 
       - name: Test binary
         working-directory: repo
-        run: ./target/release/${{ matrix.artifact_name }} --version
+        run: ${{ matrix.binary_dir }}/${{ matrix.artifact_name }} --version
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

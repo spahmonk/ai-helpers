@@ -2,6 +2,15 @@ use mem_lite::app::{CliAdapter, McpAdapter, MemoryServiceAdapter};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+
+    match args.first().map(String::as_str) {
+        Some("--version") | Some("-V") => {
+            println!("mem-lite {}", env!("CARGO_PKG_VERSION"));
+            return;
+        }
+        _ => {}
+    }
+
     let run_mcp = matches!(args.first().map(String::as_str), Some("--mcp"));
     let cli_args = if run_mcp {
         args.into_iter().skip(1).collect()
