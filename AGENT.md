@@ -9,6 +9,7 @@ This repository provides **installable AI helper modules** that any agent can in
 | Module | Description | Manifest |
 |--------|-------------|---------|
 | [ctx-lite](agent/modules/ctx-lite/manifest.json) | Fast context extractor — 87% compression, MCP server, cross-platform | [manifest.json](agent/modules/ctx-lite/manifest.json) |
+| [mem-lite](agent/modules/mem-lite/manifest.json) | Project-scoped AI memory — semantic/episodic/procedural, hybrid search, local SQLite, MCP server, cross-platform | [manifest.json](agent/modules/mem-lite/manifest.json) |
 
 ---
 

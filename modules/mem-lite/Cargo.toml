@@ -1,0 +1,23 @@
+[package]
+name = "mem-lite"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "mem_lite"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mem-lite"
+path = "src/main.rs"
+
+[dependencies]
+hex = "0.4"
+rusqlite = { version = "0.31", features = ["bundled"] }
+sha2 = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"

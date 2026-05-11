@@ -1,0 +1,66 @@
+{
+  "name": "mem-lite",
+  "version": "0.1.0",
+  "description": "Project-scoped AI memory — stores architectural decisions, episodic events, and procedures in a local SQLite DB per project, with hybrid lexical+vector search. MCP server, cross-platform (Linux/macOS/Windows).",
+  "homepage": "https://github.com/spahmonk/ai-helpers",
+
+  "install": {
+    "linux":   "curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install-mem-lite.sh | bash",
+    "macos":   "curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install-mem-lite.sh | bash",
+    "windows": "powershell -Command \"iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install-mem-lite.ps1'))\"",
+    "npm":     "npm install -g @spahmonk/mem-lite"
+  },
+
+  "verify": "mem-lite --version",
+
+  "mcp_config": {
+    "claude_desktop": {
+      "command": "npx",
+      "args": ["-y", "@spahmonk/mem-lite", "--mcp"]
+    },
+    "copilot_cli": {
+      "command": "mem-lite",
+      "args": ["--mcp"]
+    },
+    "cursor": {
+      "command": "npx",
+      "args": ["-y", "@spahmonk/mem-lite", "--mcp"]
+    },
+    "windsurf": {
+      "command": "npx",
+      "args": ["-y", "@spahmonk/mem-lite", "--mcp"]
+    }
+  },
+
+  "config_paths": {
+    "claude_desktop": {
+      "macos":   "~/Library/Application Support/Claude/claude_desktop_config.json",
+      "windows": "%APPDATA%\\Claude\\claude_desktop_config.json",
+      "linux":   "~/.config/Claude/claude_desktop_config.json"
+    },
+    "copilot_cli": {
+      "all": "~/.copilot/lsp-config.json"
+    },
+    "cursor": {
+      "all": "~/.cursor/mcp.json"
+    },
+    "windsurf": {
+      "all": "~/.codeium/windsurf/mcp_config.json"
+    }
+  },
+
+  "skills": [
+    {
+      "id":   "mem-lite-setup",
+      "name": "mem-lite Setup",
+      "url":  "https://raw.githubusercontent.com/spahmonk/ai-helpers/main/agent/modules/mem-lite/skills/mem-lite-setup.md",
+      "type": "setup"
+    },
+    {
+      "id":   "mem-lite-usage",
+      "name": "mem-lite Usage Optimization",
+      "url":  "https://raw.githubusercontent.com/spahmonk/ai-helpers/main/agent/modules/mem-lite/skills/mem-lite-usage.md",
+      "type": "usage"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
 {
-  "modules/ctx-lite": "1.0.9"
+  "modules/ctx-lite": "1.0.9",
+  "modules/mem-lite": "0.1.0"
 }
