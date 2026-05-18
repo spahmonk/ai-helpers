@@ -33,7 +33,7 @@ test('windows assets use zip archives', () => {
   );
 });
 
-test('windows extraction uses Expand-Archive instead of tar', () => {
+test('windows extraction uses Expand-Archive with double-quoted paths', () => {
   const command = getExtractionCommand(
     'x86_64-pc-windows-msvc',
     'C:\\temp\\ctx-lite.zip',
@@ -44,7 +44,7 @@ test('windows extraction uses Expand-Archive instead of tar', () => {
   assert.deepEqual(command.args, [
     '-NoProfile',
     '-Command',
-    "Expand-Archive -LiteralPath 'C:\\temp\\ctx-lite.zip' -DestinationPath 'C:\\cache' -Force",
+    'Expand-Archive -LiteralPath "C:\\temp\\ctx-lite.zip" -DestinationPath "C:\\cache" -Force',
   ]);
 });
 
