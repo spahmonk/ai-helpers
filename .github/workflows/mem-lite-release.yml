@@ -144,7 +144,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Update package.json version
-        working-directory: packages/mem-lite
+        working-directory: modules/mem-lite/npm
         run: |
           tag="${{ github.ref_name }}"
           VERSION="${tag#mem-lite-v}"
@@ -152,7 +152,7 @@ jobs:
           cat package.json | grep -A 1 '"version"'
 
       - name: Publish to npm
-        working-directory: packages/mem-lite
+        working-directory: modules/mem-lite/npm
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,226 +1,34 @@
-# ctx-lite 🚀
+# ai-helpers
 
-**Fast context extractor for AI coding with cross-platform support**
+`ai-helpers` is a repository of local-first tools for AI-assisted development.
+The root README is a hub: use it to find the right module, then jump into that module's README for installation, usage, and release details.
 
-> Extract code context with **87% compression** for Claude, Copilot, and other AI models. Perfect for MCP integration.
+## Tool catalog
 
----
-
-## ⚡ Quick Install (30 seconds)
-
-### Linux / macOS
-```bash
-curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.sh | bash
-```
-
-**To install without sudo** (non-root install dir), pass the env variable to `bash`:
-```bash
-curl -fsSL https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.sh \
-  | CTX_LITE_INSTALL_DIR=$HOME/.local/bin bash
-```
-
-### Windows (PowerShell)
-```powershell
-powershell -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/spahmonk/ai-helpers/main/scripts/install.ps1'))"
-```
-
-### npm (Node.js 18+)
-```bash
-npm install -g @spahmonk/ctx-lite
-```
-
-### Verify
-```bash
-ctx-lite --version  # Should print: ctx-lite 1.0.4
-```
-
-### Uninstall
-If you installed via the shell or PowerShell script, remove the installed binary and optional local data:
-
-- **Linux/macOS:** `sudo rm -f /usr/local/bin/ctx-lite`
-- **Windows:** remove `%ProgramFiles%\\ctx-lite`
-- **npm:** `npm uninstall -g @spahmonk/ctx-lite`
-- **Optional cleanup:** remove `~/.ctx-lite` and `~/.ctx-lite-cache`
-
-**👉 [Full installation guide, uninstall, and troubleshooting →](QUICK_START.md)**
-
----
-
-## 💡 Usage Examples
-
-```bash
-# Read and compress a file
-ctx-lite read src/main.rs
-
-# Show directory tree with compression info
-ctx-lite tree ./src
-
-# Search for text or regex patterns (optional path scopes the search)
-ctx-lite search "function_name"
-ctx-lite search "TODO" ./src
-
-# Run diagnostics
-ctx-lite doctor
-
-# Configure MCP with explicit shell policy
-ctx-lite setup-mcp --shell-profile balanced --deny-capability docker.compose.logs
-```
-
----
-
-## 📦 Features
-
-- ✅ **87% Compression** - High-efficiency context reduction
-- ✅ **Cross-Platform** - Linux, macOS, Windows
-- ✅ **MCP Compatible** - Use as Model Context Protocol server
-- ✅ **Capability Policy** - `safe`, `balanced`, `dangerous` profiles + per-capability overrides
-- ✅ **Fast** - <1s per session
-- ✅ **Secure** - Path jail, audit logging
-- ✅ **ML Optimized** - Adaptive compression modes
-
----
-
-## 🛡️ Shell Capability Policy
-
-ctx-lite keeps the raw allowlist as the execution boundary, but exposes a higher-level capability model for MCP and CLI configuration.
-
-### Profiles
-
-- **safe** - inspect/log/test workflows only
-- **balanced** - `safe` plus build/lint/typecheck workflows
-- **dangerous** - side-effectful local state/runtime changes such as `docker run`, `npm install`, `cargo run`
-
-### Process-level args
-
-```bash
-ctx-lite --mcp \
-  --shell-profile balanced \
-  --allow-capability docker.logs,cargo.test \
-  --deny-capability docker.compose.logs \
-  --allow-command "git show --stat"
-```
-
-### Common capability IDs
-
-| Capability | Commands enabled | Profile |
+| Tool | What it does | Docs |
 | --- | --- | --- |
-| `git.inspect` | `git rev-parse --show-toplevel`, `git status --short`, `git diff --stat`, `git log --oneline -n 20` | safe |
-| `docker.logs` | `docker logs ...` | safe |
-| `docker.compose.logs` | `docker compose logs ...` | safe |
-| `npm.test` | `npm test` | safe |
-| `cargo.test` | `cargo test ...` | safe |
-| `npm.build` | `npm run build` | balanced |
-| `cargo.build` | `cargo build` | balanced |
-| `cargo.clippy` | `cargo clippy --all-targets --all-features` | balanced |
-| `docker.run` | `docker run ...` | dangerous |
-| `npm.install` | `npm install ...` | dangerous |
-| `cargo.run` | `cargo run ...` | dangerous |
+| `ctx-lite` | Fast context extraction and compression for AI coding workflows and MCP setups. | [modules/ctx-lite/README.md](modules/ctx-lite/README.md) |
+| `mem-lite` | Local, project-scoped memory storage and recall with CLI and MCP support. | [modules/mem-lite/README.md](modules/mem-lite/README.md) |
 
-Use `ctx-lite doctor` to inspect the effective policy seen by the runtime.
+## Where to go next
 
----
+- **ctx-lite** — If you want code-context extraction, shell-policy-aware MCP setup, or the CLI install paths, start with [modules/ctx-lite/README.md](modules/ctx-lite/README.md).
+- **mem-lite** — If you want local project memory, search/recall workflows, or MCP usage, start with [modules/mem-lite/README.md](modules/mem-lite/README.md).
 
-## 🤖 For AI Agents
+## Repository notes
 
-If a user asked you to install or configure ctx-lite, read **[AGENT.md](AGENT.md)** first.
+- The workspace includes `ctx-lite` and `mem-lite` under `modules/`.
+- For the AI-agent entrypoint, see [AGENT.md](AGENT.md).
+- Module-local READMEs are the canonical user-facing docs for each tool.
+- Source build and test from the repository root:
 
-It provides the universal 5-step integration protocol:
-1. Read `manifest.json` for this module
-2. Check if already installed
-3. Run the installer
-4. Run the `ctx-lite-setup` skill — it asks the user 3 questions and writes the MCP config with their consent
-5. Register `ctx-lite-usage` skill for optimal token-efficient workflows
-
-**→ [AGENT.md](AGENT.md)** — complete agent integration guide
-
----
-
-## 📚 Documentation
-
-- **[Quick Start](QUICK_START.md)** - Get started in 3 minutes, including uninstall and cleanup
-- **[MCP Integration](MCP_INTEGRATION.md)** - Profiles, capability IDs, setup examples, and exact shell support
-- **[Module Details](modules/ctx-lite/README.md)** - ctx-lite specifics
-- **[Agent Integration](AGENT.md)** - For AI agents installing ctx-lite on behalf of users
-
----
-
-## 🏗️ Development
-
-### Build from source
 ```bash
-git clone https://github.com/spahmonk/ai-helpers.git
-cd ai-helpers
-cargo build --release
-```
-
-### Run tests
-```bash
+cargo build --workspace --release
 cargo test --workspace
 ```
 
-### Code quality
-```bash
-cargo fmt --all --check
-```
+## Releases and support
 
----
-
-## 📊 Benchmarks
-
-| Metric | Result |
-|--------|--------|
-| Session Compression | 87% |
-| Token Reduction | 66-75% |
-| Processing Time | <1s per session |
-| Cache Hit Rate | 94%+ |
-
----
-
-## 🔐 Security
-
-- Path jail prevents directory traversal
-- Git config injection prevention
-- Audit log with redaction
-- SHA256 content hashing
-
----
-
-## 📦 Release Information
-
-- **Version**: 1.0.4
-- **Status**: Production Ready
-- **Tests**: 258/258 passing ✓
-- **Platforms**: Linux, macOS, Windows
-- **License**: MIT (see LICENSE)
-
-**[All releases →](https://github.com/spahmonk/ai-helpers/releases)**
-
----
-
-## 🤝 Contributing
-
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Write tests first (TDD)
-4. Ensure all tests pass: `cargo test --workspace`
-5. Submit a pull request
-
----
-
-## ❓ Support
-
-- **Issues**: [GitHub Issues](https://github.com/spahmonk/ai-helpers/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/spahmonk/ai-helpers/discussions)
-- **Documentation**: [Wiki](https://github.com/spahmonk/ai-helpers/wiki)
-
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file
-
----
-
-**Made with ❤️ for AI-assisted development**
+- Releases: <https://github.com/spahmonk/ai-helpers/releases>
+- Issues: <https://github.com/spahmonk/ai-helpers/issues>
+- License: MIT
