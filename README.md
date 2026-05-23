@@ -17,7 +17,8 @@ The root README is a hub: use it to find the right module, then jump into that m
 
 ## Repository notes
 
-- The workspace currently includes at least `ctx-lite` and `mem-lite` under `modules/`.
+- The workspace includes `ctx-lite` and `mem-lite` under `modules/`.
+- For the AI-agent entrypoint, see [AGENT.md](AGENT.md).
 - Module-local READMEs are the canonical user-facing docs for each tool.
 - Source build and test from the repository root:
 
