@@ -5,7 +5,7 @@
 The current repository layout is understandable to someone who already knows the release mechanics, but it is confusing to a normal contributor or user:
 
 - the root `README.md` reads like a `ctx-lite` product README rather than a repository README
-- `mem-lite` appears to live in two places: `modules/mem-lite` and `packages/mem-lite`
+- `mem-lite` appears to live in two places: `modules/mem-lite` and `modules/mem-lite/npm`
 - the npm wrapper for `mem-lite` is technically valid, but its current placement makes the product feel duplicated
 - the documentation hierarchy does not clearly distinguish product code, packaging adapters, and repository-level navigation
 
@@ -31,11 +31,11 @@ This makes the repository look like a single-product repo even though it already
 `mem-lite` is currently split across:
 
 - `modules/mem-lite` — Rust crate, binary, tests, source of truth for the product
-- `packages/mem-lite` — npm wrapper that downloads and launches the released binary
+- `modules/mem-lite/npm` — npm wrapper that downloads and launches the released binary
 - `scripts/install-mem-lite.sh` and `scripts/install-mem-lite.ps1` — direct installer scripts
-- `.github/workflows/mem-lite-release.yml` — release pipeline using `packages/mem-lite`
+- `.github/workflows/mem-lite-release.yml` — release pipeline using `modules/mem-lite/npm`
 
-This split is not intrinsically wrong, but the current physical layout makes `packages/mem-lite` look like a second product home rather than a packaging adapter.
+This split is not intrinsically wrong, but the current physical layout makes `modules/mem-lite/npm` look like a second product home rather than a packaging adapter.
 
 ## Design goals
 
@@ -82,22 +82,22 @@ That directory should be the human-facing home for:
 
 ### 3. The npm wrapper moves under modules/mem-lite/npm
 
-The current contents of `packages/mem-lite` should move to:
+The current contents should live under:
 
 `modules/mem-lite/npm`
 
 Specifically:
 
-- `packages/mem-lite/package.json` -> `modules/mem-lite/npm/package.json`
-- `packages/mem-lite/bin/index.js` -> `modules/mem-lite/npm/bin/index.js`
-- `packages/mem-lite/bin/download-binary.js` -> `modules/mem-lite/npm/bin/download-binary.js`
-- `packages/mem-lite/bin/release-assets.js` -> `modules/mem-lite/npm/bin/release-assets.js`
+- `modules/mem-lite/npm/package.json`
+- `modules/mem-lite/npm/bin/index.js`
+- `modules/mem-lite/npm/bin/download-binary.js`
+- `modules/mem-lite/npm/bin/release-assets.js`
 
 This preserves the wrapper but makes it physically subordinate to the product instead of looking like a second top-level product location.
 
 ### 4. packages/ stops being part of the user mental model
 
-After the move, `packages/mem-lite` should be removed.
+After the move, the obsolete top-level wrapper directory should be removed.
 
 If `packages/` becomes empty, it should be removed as well.
 
@@ -145,11 +145,11 @@ If a README is needed there at all, it should be short and explicitly describe t
 
 ## Release and tooling impact
 
-The following references must move from `packages/mem-lite` to `modules/mem-lite/npm`:
+The following references must point at `modules/mem-lite/npm`:
 
 - `.github/workflows/mem-lite-release.yml`
 - npm package metadata such as `repository.directory`
-- any script, doc, or release reference that points at `packages/mem-lite`
+- any script, doc, or release reference that points at `modules/mem-lite/npm`
 
 The release model itself does not change:
 
@@ -176,7 +176,7 @@ The implementation should proceed in this order:
 
 1. move the `mem-lite` npm wrapper under `modules/mem-lite/npm`
 2. update workflow and metadata references
-3. remove obsolete `packages/mem-lite` path
+3. remove the obsolete top-level wrapper path
 4. rewrite the root README as a repository hub
 5. ensure `modules/mem-lite/README.md` exists and serves as the product entrypoint
 6. verify install/release/docs references still resolve correctly
@@ -190,5 +190,5 @@ This design is complete when all of the following are true:
 - the npm wrapper lives under `modules/mem-lite/npm`
 - release workflow references the new npm wrapper path
 - `modules/mem-lite/README.md` is the obvious primary documentation home for `mem-lite`
-- `packages/mem-lite` is gone
+- the obsolete top-level wrapper path is gone
 - existing `mem-lite` install and release paths remain functional after the move
