@@ -31,4 +31,4 @@ cargo test --workspace
 
 - Releases: <https://github.com/spahmonk/ai-helpers/releases>
 - Issues: <https://github.com/spahmonk/ai-helpers/issues>
-- License: [MIT](LICENSE)
+- License: MIT
