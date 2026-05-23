@@ -27,7 +27,7 @@
       "extra-files": [
         {
           "type": "json",
-          "path": "packages/mem-lite/package.json",
+          "path": "modules/mem-lite/npm/package.json",
           "jsonpath": "$.version"
         },
         {
